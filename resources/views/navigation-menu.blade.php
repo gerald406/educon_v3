@@ -46,8 +46,14 @@
                                 {{ __('Mis Sílabos') }}
                             </x-nav-link>
                         @endcan
+
+                        @can('aprobar-silabos')
+                            <x-nav-link href="{{ route('academic-process.syllabus-approval') }}" :active="request()->routeIs('academic-process.syllabus-approval')">
+                                Aprobar Sílabos
+                            </x-nav-link>
+                        @endcan
                         
-                        @can('registrar-notas')
+                        {{-- @can('registrar-notas')
                             <x-nav-link href="{{ route('evaluation.grades') }}" :active="request()->routeIs('evaluation.grades')">
                                 {{ __('Registro de Notas') }}
                             </x-nav-link>
@@ -81,7 +87,7 @@
                             <x-nav-link href="{{ route('teacher.cumulative-attendance-report') }}" :active="request()->routeIs('teacher.cumulative-attendance-report')">
                                 {{ __('Asistencia Acumulada') }}
                             </x-nav-link>
-                        @endcan
+                        @endcan --}}
                     @endif
 
                     {{-- Vista de Estudiantes --}}
@@ -186,8 +192,14 @@
                         {{ __('Mis Sílabos') }}
                     </x-responsive-nav-link>
                 @endcan
+
+                @can('aprobar-silabos')
+                    <x-responsive-nav-link href="{{ route('academic-process.syllabus-approval') }}" :active="request()->routeIs('academic-process.syllabus-approval')">
+                        Aprobar Sílabos
+                    </x-responsive-nav-link>
+                @endcan
                 
-                @can('registrar-notas')
+                {{-- @can('registrar-notas')
                     <x-responsive-nav-link href="{{ route('evaluation.grades') }}" :active="request()->routeIs('evaluation.grades')">
                         {{ __('Registro de Notas') }}
                     </x-responsive-nav-link>
@@ -221,7 +233,7 @@
                     <x-responsive-nav-link href="{{ route('teacher.cumulative-attendance-report') }}" :active="request()->routeIs('teacher.cumulative-attendance-report')">
                         {{ __('Asistencia Acumulada') }}
                     </x-responsive-nav-link>
-                @endcan
+                @endcan --}}
             @endif
 
             {{-- Menú Responsive para Estudiantes --}}

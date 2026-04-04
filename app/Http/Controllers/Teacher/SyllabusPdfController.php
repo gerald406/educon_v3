@@ -11,10 +11,15 @@ class SyllabusPdfController extends Controller
 {
     public function download(Syllabus $syllabus)
     {
-        // 1. Seguridad: Verificar que el sílabo pertenezca al docente logueado
-        // Accedemos al teacher_id a través de la relación teacherAssignment
-        if ($syllabus->teacherAssignment->teacher_id !== Auth::user()->teacher->id) {
-            abort(403, 'No tienes permiso para ver este sílabo.');
+        $user = Auth::user();
+
+        // 1. Seguridad: Verificar roles y permisos
+        // Si NO es Administrador ni Coordinador, validamos que sea el docente dueño
+        if (!$user->hasRole(['Administrador', 'Coordinador'])) {
+            // Verificamos primero si el usuario tiene un perfil de docente válido
+            if (!$user->teacher || $syllabus->teacherAssignment->teacher_id !== $user->teacher->id) {
+                abort(403, 'No tienes permiso para ver este sílabo.');
+            }
         }
 
         // 2. Cargar todas las relaciones necesarias para que el PDF no falle

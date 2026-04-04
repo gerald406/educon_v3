@@ -68,13 +68,24 @@ class User extends Authenticatable
         'profile_photo_url',
     ];
 
+
     /**
      * Determina si el usuario tiene acceso al panel administrativo/staff
-     * basándose en permisos de gestión.
      */
     public function hasAdminAccess(): bool
     {
-        // Permisos que indican que el usuario es parte del staff administrativo
+        // 1. Los Administradores SIEMPRE ven el panel lateral (Sidebar)
+        if ($this->hasRole('Administrador')) {
+            return true;
+        }
+
+        // 2. Si es estrictamente un Docente o Coordinador (y no es Admin), 
+        // forzamos a que NO vea el Sidebar para liberar su pantalla completa.
+        if ($this->hasAnyRole(['Coordinador', 'Docente'])) {
+            return false;
+        }
+
+        // 3. Lógica original para otros roles del sistema (ej. Admisión, Tesorería)
         $adminPermissions = [
             'gestionar-institucion',
             'gestionar-configuracion',
@@ -107,22 +118,12 @@ class User extends Authenticatable
     }
 
     /**
-     * Determina si el usuario es EXCLUSIVAMENTE un docente
-     * (NO un usuario administrativo que puede tener permisos de docencia)
+     * Determina si el usuario usa la barra de navegación superior académica
      */
     public function isTeacher(): bool
     {
-        // Si tiene acceso admin, NO es un docente de la vista regular
-        if ($this->hasAdminAccess()) {
-            return false;
-        }
-
-        // Solo si NO es admin Y tiene permisos típicos de docente
-        return $this->hasAnyPermission([
-            'registrar-notas',
-            'registrar-asistencia',
-            'subir-silabo',
-        ]);
+        // Si tiene cualquiera de estos dos roles, SIEMPRE verá sus enlaces superiores
+        return $this->hasAnyRole(['Docente', 'Coordinador']);
     }
 
     /**
