@@ -60,6 +60,7 @@ use App\Livewire\Pages\Admission\AdmissionOfferingManager;
 use App\Livewire\Pages\Admission\FinancialEntityManager;
 use App\Livewire\Pages\Admission\AdmissionDashboard;
 use App\Livewire\Pages\Admission\FastGradeEntry;
+use App\Livewire\Pages\Admission\AdmissionRankingReport;
 
 use App\Livewire\Pages\Student\MyActivities;
 use App\Livewire\Pages\Student\MyAttendances;
@@ -85,6 +86,7 @@ use App\Livewire\Pages\Security\UserManager;
 use App\Livewire\Pages\Teacher\LearningSessionEditor;
 use App\Livewire\Pages\Teacher\LearningSessionList;
 use App\Livewire\Pages\Teacher\SyllabusEditor;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -265,6 +267,7 @@ Route::prefix('admission')->middleware(['auth', 'verified', 'permission:gestiona
     Route::get('ficha/{applicant}', [AdmissionDocumentController::class, 'ficha'])->name('ficha');
     Route::get('dashboard', AdmissionDashboard::class)->name('dashboard');
     Route::get('fast-grades', FastGradeEntry::class)->name('fast-grades');
+    Route::get('ranking-report', AdmissionRankingReport::class)->name('ranking-report');
 
     Route::get('origin-schools', OriginSchoolManager::class)
         ->name('origin-schools');

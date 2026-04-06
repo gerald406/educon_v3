@@ -259,7 +259,6 @@
         </div>
 
         {{-- VI. PROGRAMACIÓN DE SESIONES --}}
-        <div style="page-break-before: always;"></div>
         <h3>VI. ACTIVIDADES DE APRENDIZAJE</h3>
         <div class="section-content">
             <table>
