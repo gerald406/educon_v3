@@ -7,6 +7,7 @@ use App\Models\ExamClassroomAssignment;
 use App\Models\Institution;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Storage;
+use Picqer\Barcode\BarcodeGeneratorSVG;
 
 use BaconQrCode\Renderer\ImageRenderer;
 use BaconQrCode\Renderer\Image\SvgImageBackEnd;
@@ -108,12 +109,28 @@ class ExamReportController extends Controller
             $qrCodes[$assignment->applicant_id] = 'data:image/svg+xml;base64,' . base64_encode($svg);
         }
 
+        // AÑADIR después del bloque $qrCodes = [];
+        // Generar código de barras por postulante
+        $barCodes = [];
+        $generator = new BarcodeGeneratorSVG();
+        foreach ($assignments as $assignment) {
+            $dni = $assignment->applicant->user->document_number ?? '00000000';
+            $svg = $generator->getBarcode(
+                $dni,
+                BarcodeGeneratorSVG::TYPE_CODE_128,
+                2,   // ancho de barra
+                60   // altura en px
+            );
+            $barCodes[$assignment->applicant_id] = 'data:image/svg+xml;base64,' . base64_encode($svg);
+        }
+
         $pdf = Pdf::loadView('reports.exam.answer-sheets', [
             'classroom'       => $classroom,
             'assignments'     => $assignments,
             'institution'     => $institution,
             'headerImageData' => $headerImageData,
             'qrCodes'         => $qrCodes,
+            'barCodes'        => $barCodes,
         ]);
 
         $pdf->setPaper('A4', 'portrait');

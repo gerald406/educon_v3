@@ -27,8 +27,9 @@ class TeacherManager extends Component
     public $searchDni        = '';
     public $document_number  = '';
     public $name             = '';
-    public $paternal_surname = '';
-    public $maternal_surname = '';
+    // public $paternal_surname = '';
+    // public $maternal_surname = '';
+    public $lastname         = ''; // Añade esta
     public $email            = '';
     public $is_new_user      = true;
 
@@ -81,9 +82,13 @@ class TeacherManager extends Component
                 'digits:8',
                 Rule::unique('users', 'document_number')->ignore($userId)
             ],
+            // Reemplaza las reglas de paternal y maternal por esta:
             'name'             => 'required|string|max:255',
+            'lastname'         => 'required|string|max:255',
+
+            /* 'name'             => 'required|string|max:255',
             'paternal_surname' => 'required|string|max:255',
-            'maternal_surname' => 'required|string|max:255',
+            'maternal_surname' => 'required|string|max:255', */
             'email'            => [
                 'required',
                 'email',
@@ -148,8 +153,9 @@ class TeacherManager extends Component
 
             if ($apiData) {
                 $this->name             = $apiData['nombres'];
-                $this->paternal_surname = $apiData['apellido_paterno'];
-                $this->maternal_surname = $apiData['apellido_materno'];
+                $this->lastname    = trim($apiData['apellido_paterno'] . ' ' . $apiData['apellido_materno']);
+                // $this->paternal_surname = $apiData['apellido_paterno'];
+                // $this->maternal_surname = $apiData['apellido_materno'];
                 $this->email            = '';
                 $this->is_new_user      = true;
                 $this->editingUser      = null;
@@ -161,8 +167,9 @@ class TeacherManager extends Component
                 ]);
             } else {
                 $this->name             = '';
-                $this->paternal_surname = '';
-                $this->maternal_surname = '';
+                $this->lastname    = '';
+                // $this->paternal_surname = '';
+                // $this->maternal_surname = '';
                 $this->is_new_user      = true;
                 $this->editingUser      = null;
 
@@ -180,11 +187,12 @@ class TeacherManager extends Component
         $this->editingUser     = $user;
         $this->document_number = $user->document_number;
         $this->name            = $user->name;
-        $parts                 = explode(' ', $user->lastname ?? '');
+        $this->lastname        = $user->lastname;
+        /* $parts                 = explode(' ', $user->lastname ?? '');
         $this->paternal_surname = $parts[0] ?? '';
         $this->maternal_surname = isset($parts[1])
             ? implode(' ', array_slice($parts, 1))
-            : '';
+            : ''; */
         $this->email = $user->email;
     }
 
@@ -236,11 +244,11 @@ class TeacherManager extends Component
 
         DB::transaction(function () {
             // 1. Crear o actualizar usuario
-            $fullLastname = trim($this->paternal_surname . ' ' . $this->maternal_surname);
+            //$fullLastname = trim($this->paternal_surname . ' ' . $this->maternal_surname);
 
             $userData = [
                 'name'            => $this->name,
-                'lastname'        => $fullLastname,
+                'lastname'        => $this->lastname,
                 'document_number' => $this->document_number,
                 'email'           => $this->email,
             ];
@@ -406,9 +414,8 @@ class TeacherManager extends Component
         $this->editingUser      = null;
         $this->searchDni        = '';
         $this->document_number  = '';
-        $this->name             = '';
-        $this->paternal_surname = '';
-        $this->maternal_surname = '';
+        $this->name = '';
+        $this->lastname = '';
         $this->email            = '';
         $this->code             = '';
         $this->academic_degree  = '';

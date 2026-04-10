@@ -27,8 +27,9 @@ class StudentManager extends Component
     public $searchDni = '';
     public $document_number = '';
     public $name = '';
-    public $paternal_surname = '';
-    public $maternal_surname = '';
+    // public $paternal_surname = '';
+    // public $maternal_surname = '';
+    public $lastname = ''; // <-- Nueva variable unificada
     public $email = '';
 
     // Extras de User/Applicant
@@ -75,8 +76,7 @@ class StudentManager extends Component
             // User
             'document_number' => ['required', 'digits:8', Rule::unique('users', 'document_number')->ignore($userId)],
             'name' => 'required|string|max:255',
-            'paternal_surname' => 'required|string|max:255',
-            'maternal_surname' => 'required|string|max:255',
+            'lastname' => 'required|string|max:255',
             'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($userId)],
 
             // Extras
@@ -110,16 +110,14 @@ class StudentManager extends Component
             $apiData = $this->personService()->search($this->searchDni);
 
             if ($apiData) {
-                $this->name = $apiData['nombres'];
-                $this->paternal_surname = $apiData['apellido_paterno'];
-                $this->maternal_surname = $apiData['apellido_materno'];
+                $this->name     = $apiData['nombres'];
+                $this->lastname = trim($apiData['apellido_paterno'] . ' ' . $apiData['apellido_materno']);
                 $this->email = '';
                 $this->editingUser = null;
                 $this->dispatch('swal', ['icon' => 'success', 'title' => 'Encontrado', 'text' => 'Datos recuperados de API.']);
             } else {
                 $this->name = '';
-                $this->paternal_surname = '';
-                $this->maternal_surname = '';
+                $this->lastname = '';
                 $this->editingUser = null;
                 $this->dispatch('swal', ['icon' => 'warning', 'title' => 'No Encontrado', 'text' => 'Ingrese datos manualmente.']);
             }
@@ -131,11 +129,7 @@ class StudentManager extends Component
         $this->editingUser = $user;
         $this->document_number = $user->document_number;
         $this->name = $user->name;
-
-        $parts = explode(' ', $user->lastname);
-        $this->paternal_surname = $parts[0] ?? '';
-        $this->maternal_surname = isset($parts[1]) ? implode(' ', array_slice($parts, 1)) : '';
-
+        $this->lastname        = $user->lastname;
         $this->email = $user->email;
 
         // Si ya es estudiante, cargar datos extra si existen en Applicant o Student
@@ -191,11 +185,11 @@ class StudentManager extends Component
         DB::beginTransaction();
         try {
             // 1. Usuario
-            $fullLastname = trim($this->paternal_surname . ' ' . $this->maternal_surname);
+            // $fullLastname = trim($this->paternal_surname . ' ' . $this->maternal_surname);
 
             $userData = [
                 'name' => $this->name,
-                'lastname' => $fullLastname,
+                'lastname'        => $this->lastname,
                 'document_number' => $this->document_number,
                 'email' => $this->email,
             ];
@@ -294,8 +288,7 @@ class StudentManager extends Component
         $this->searchDni = '';
         $this->document_number = '';
         $this->name = '';
-        $this->paternal_surname = '';
-        $this->maternal_surname = '';
+        $this->lastname = '';
         $this->email = '';
         $this->phone = '';
         $this->address = '';

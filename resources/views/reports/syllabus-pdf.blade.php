@@ -198,7 +198,7 @@
                 <tr>
                     <td class="text-bold">1.12 DOCENTE</td>
                     <td>:</td>
-                    <td>{{ Str::upper(($user?->lastname ?? '') . ' ' . ($user?->name ?? 'NO ASIGNADO')) }}</td>
+                    <td>{{ Str::upper(($user?->name ?? 'NO ASIGNADO') . ' ' . ($user?->lastname ?? '')) }}</td>     
                 </tr>
                 <tr>
                     <td class="text-bold">1.13 CORREO INSTITUCIONAL</td>

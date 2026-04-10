@@ -7,6 +7,7 @@ use App\Models\AdmissionModality;
 use App\Models\AdmissionOffering;
 use App\Models\Applicant;
 use App\Models\Career;
+use App\Models\Shift;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Layout;
@@ -20,9 +21,11 @@ class AdmissionRankingReport extends Component
 
     public $modalityId = '';
     public $careerId   = '';
+    public $shiftId    = '';
 
     public Collection $modalities;
     public Collection $careers;
+    public Collection $shifts;
 
     // Preview de ranking en pantalla
     public array $rankingPreview = [];
@@ -32,6 +35,7 @@ class AdmissionRankingReport extends Component
     {
         $this->modalities = AdmissionModality::where('is_active', true)->orderBy('name')->get();
         $this->careers    = Career::where('status', 'active')->orderBy('name')->get();
+        $this->shifts     = Shift::where('status', 'active')->orderBy('start_time')->get();
     }
 
     public function updatedModalityId(): void
@@ -46,21 +50,31 @@ class AdmissionRankingReport extends Component
         $this->loadPreview();
     }
 
+    public function updatedShiftId(): void
+    {
+        $this->rankingPreview = [];
+        $this->loadPreview();
+    }
+
     public function loadPreview(): void
     {
-        if (!$this->modalityId || !$this->careerId) {
+        if (!$this->modalityId || !$this->careerId || !$this->shiftId) {
             $this->rankingPreview = [];
             $this->vacancies      = 0;
             return;
         }
 
         $this->vacancies = AdmissionOffering::where('career_id', $this->careerId)
+            ->where('shift_id', $this->shiftId)
             ->where('is_active', true)
             ->sum('vacancies');
 
         $applicants = Applicant::with(['user'])
             ->where('admission_modality_id', $this->modalityId)
-            ->whereHas('admissionOffering', fn($q) => $q->where('career_id', $this->careerId))
+            ->whereHas('admissionOffering', function ($q) {
+                $q->where('career_id', $this->careerId)
+                    ->where('shift_id', $this->shiftId);
+            })
             ->whereNotNull('exam_score')
             ->orderByDesc('exam_score')
             ->get();
@@ -81,20 +95,28 @@ class AdmissionRankingReport extends Component
     {
         $this->authorize('gestionar-admision');
 
-        if (!$this->modalityId || !$this->careerId) {
+        if (!$this->modalityId || !$this->careerId || !$this->shiftId) {
             $this->dispatch('swal', [
                 'icon'  => 'warning',
                 'title' => 'Atención',
-                'text'  => 'Seleccione la modalidad y el programa de estudios.',
+                'text'  => 'Seleccione la modalidad, el programa de estudios y el turno.',
             ]);
             return;
         }
 
         $career   = Career::find($this->careerId);
-        $filename = 'ranking-' . str($career->name ?? 'programa')->slug() . '-' . now()->format('Ymd') . '.xlsx';
+        $shift    = Shift::find($this->shiftId);
+        $filename = 'ranking-'
+            . str($career->name ?? 'programa')->slug() . '-'
+            . str($shift->name  ?? 'turno')->slug()    . '-'
+            . now()->format('Ymd') . '.xlsx';
 
         return Excel::download(
-            new AdmissionRankingExport((int) $this->modalityId, (int) $this->careerId),
+            new AdmissionRankingExport(
+                (int) $this->modalityId,
+                (int) $this->careerId,
+                (int) $this->shiftId
+            ),
             $filename
         );
     }

@@ -121,8 +121,18 @@
                         <x-input-error for="searchDni" />
                         <x-input-error for="document_number" />
                     </div>
+                    <div>
+                        <x-label value="Nombres" />
+                        <x-input wire:model="name" type="text" class="w-full" />
+                        <x-input-error for="name" />
+                    </div>
+                    <div>
+                        <x-label value="Apellidos" />
+                        <x-input wire:model="lastname" type="text" class="w-full" />
+                        <x-input-error for="lastname" />
+                    </div>
 
-                    <div class="grid grid-cols-2 gap-2">
+                    {{-- <div class="grid grid-cols-2 gap-2">
                         <div>
                             <x-label value="Apellido Paterno" />
                             <x-input wire:model="paternal_surname" type="text" class="w-full" />
@@ -133,12 +143,12 @@
                             <x-input wire:model="maternal_surname" type="text" class="w-full" />
                             <x-input-error for="maternal_surname" />
                         </div>
-                    </div>
+                    </div> 
                     <div>
                         <x-label value="Nombres" />
                         <x-input wire:model="name" type="text" class="w-full" />
                         <x-input-error for="name" />
-                    </div>
+                    </div> --}}
                     <div>
                         <x-label value="Correo Electrónico" />
                         <x-input wire:model="email" type="email" class="w-full" />

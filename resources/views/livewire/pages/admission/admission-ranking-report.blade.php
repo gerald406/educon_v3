@@ -7,7 +7,7 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
 
             {{-- Panel de Filtros --}}
-            <div class="bg-white shadow-xl sm:rounded-lg p-6">
+            {{-- <div class="bg-white shadow-xl sm:rounded-lg p-6">
                 <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4">Parámetros del Reporte</h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                     <div>
@@ -40,10 +40,55 @@
                         </button>
                     </div>
                 </div>
-            </div>
+            </div> --}}
+            {{-- Panel de Filtros --}}
+<div class="bg-white shadow-xl sm:rounded-lg p-6">
+    <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-4">Parámetros del Reporte</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+        <div>
+            <x-label value="Modalidad de Admisión *" />
+            <select wire:model.live="modalityId" class="w-full border-gray-300 rounded-md shadow-sm mt-1">
+                <option value="">Seleccione una modalidad...</option>
+                @foreach($modalities as $m)
+                    <option value="{{ $m->id }}">{{ $m->name }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <x-label value="Programa de Estudios *" />
+            <select wire:model.live="careerId" class="w-full border-gray-300 rounded-md shadow-sm mt-1">
+                <option value="">Seleccione un programa...</option>
+                @foreach($careers as $c)
+                    <option value="{{ $c->id }}">{{ $c->name }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <x-label value="Turno *" />
+            <select wire:model.live="shiftId" class="w-full border-gray-300 rounded-md shadow-sm mt-1">
+                <option value="">Seleccione un turno...</option>
+                @foreach($shifts as $s)
+                    <option value="{{ $s->id }}">{{ $s->name }}</option>
+                @endforeach
+            </select>
+        </div>
+        <div>
+            <button wire:click="exportExcel"
+                    @disabled(!$modalityId || !$careerId || !$shiftId)
+                    class="w-full inline-flex items-center justify-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-md shadow-sm transition">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                Descargar Ranking Excel
+            </button>
+        </div>
+    </div>
+</div>
 
             {{-- Preview del Ranking --}}
-            @if($modalityId && $careerId)
+            {{-- @if($modalityId && $careerId) --}}
+            @if($modalityId && $careerId && $shiftId)
                 <div class="bg-white shadow-xl sm:rounded-lg p-6">
 
                     {{-- Cabecera con métricas --}}

@@ -82,9 +82,6 @@ class DistributionManager extends Component
 
     private function getApplicantsQuery()
     {
-        // [CORRECCIÓN CRÍTICA]
-        // 1. Buscamos 'registrado' en español.
-        // 2. Agregamos ->has('user') para evitar error 500 si se borró el usuario.
 
         $query = Applicant::with(['user', 'admissionOffering.career', 'admissionModality'])
             ->has('user')

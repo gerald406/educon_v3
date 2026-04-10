@@ -86,11 +86,17 @@
                         <x-input-error for="document_number" />
                     </div>
 
-                    <div class="grid grid-cols-2 gap-2">
-                        <div><x-label value="Apellido Paterno" /><x-input wire:model="paternal_surname" class="w-full" /><x-input-error for="paternal_surname" /></div>
-                        <div><x-label value="Apellido Materno" /><x-input wire:model="maternal_surname" class="w-full" /><x-input-error for="maternal_surname" /></div>
+                    <div>
+                        <x-label value="Nombres" />
+                        <x-input wire:model="name" type="text" class="w-full" />
+                        <x-input-error for="name" />
                     </div>
-                    <div><x-label value="Nombres" /><x-input wire:model="name" class="w-full" /><x-input-error for="name" /></div>
+                    <div>
+                        <x-label value="Apellidos" />
+                        <x-input wire:model="lastname" type="text" class="w-full" />
+                        <x-input-error for="lastname" />
+                    </div>
+
                     <div><x-label value="Email" /><x-input wire:model="email" type="email" class="w-full" /><x-input-error for="email" /></div>
                     
                     <div class="grid grid-cols-2 gap-2">

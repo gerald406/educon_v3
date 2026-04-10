@@ -81,7 +81,7 @@
 
     <div class="info-section">
         <div class="info-row">
-            <strong>Pabellón:</strong> {{ strtoupper($classroom->pavilion->name) }}
+            <strong>Pabellón:</strong> {{ mb_strtoupper($classroom->pavilion->name) }}
         </div>
         <div class="info-row">
             <strong>Capacidad:</strong> {{ $classroom->capacity }} participantes
@@ -105,7 +105,7 @@
                         {{ strtoupper($assign->applicant->user->lastname) }} {{ strtoupper($assign->applicant->user->name) }}
                     </td>
                     <td class="col-program">
-                        {{ strtoupper($classroom->pavilion->name) }}
+                        {{ mb_strtoupper($classroom->pavilion->name) }}
                     </td>
                     <td class="col-sign"> AULA {{ $classroom->room_number }}</td>
                 </tr>

@@ -153,6 +153,27 @@
             vertical-align: middle;
         }
 
+        /* ── CÓDIGO DE BARRAS ── */
+        .barcode-wrap {
+            margin-top: 8px;
+            text-align: center;
+            padding-top: 5px;
+            border-top: 1px dashed #ccc;
+        }
+        .barcode-wrap img {
+            width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 auto 2px auto;
+        }
+        .barcode-num {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 8px;
+            letter-spacing: 2px;
+            color: #333;
+            text-align: center;
+        }
+
         /* ── PIE ── */
         .pie {
             position: fixed;
@@ -180,7 +201,7 @@
     $dni       = $user->document_number ?? '00000000';
     $fullName  = strtoupper(trim(($user->lastname ?? '') . ', ' . ($user->name ?? '')));
     $peturno   = strtoupper(($career?->name ?? 'SIN PROGRAMA') . ' / ' . ($shift?->name ?? 'SIN TURNO'));
-    $ubicacion = strtoupper(
+    $ubicacion = mb_strtoupper(
         ($classroom->pavilion->name ?? 'SIN PABELLÓN') .
         ' — Aula: ' . $classroom->room_number
     );
@@ -289,7 +310,8 @@
             <td class="col-sep"></td>
 
 
-            {{-- Columna 3: 51–60 --}}
+            {{-- DESPUÉS --}}
+            {{-- Columna 3: 51–60 + QR + Código de Barras --}}
             <td style="vertical-align: top;">
                 <table class="answer-table">
                     @for($i = 51; $i <= 60; $i++)
@@ -305,6 +327,25 @@
                         </tr>
                     @endfor
                 </table>
+
+                {{-- QR centrado debajo de las preguntas 51-60 --}}
+                @if($qr)
+                    <div style="text-align: center; margin-top: 10px; padding-top: 6px;
+                                border-top: 1px dashed #ccc;">
+                        <img src="{{ $qr }}" alt="QR"
+                            style="width: 2cm; height: 2cm; display: block; margin: 0 auto 3px auto;">
+                        
+                    </div>
+                @endif
+
+                {{-- Código de barras debajo del QR --}}
+                @php $barCode = $barCodes[$assignment->applicant_id] ?? null; @endphp
+                @if($barCode)
+                    <div class="barcode-wrap">
+                        <img src="{{ $barCode }}" alt="Código de Barras">
+                    </div>
+                @endif
+
             </td>
 
         </tr>
