@@ -183,7 +183,8 @@
                 <tr>
                     <td class="text-bold">1.9 PERIODO ACADÉMICO</td>
                     <td>:</td>
-                    <td>{{ Str::upper($unit?->semester ?? '---') }}</td>
+                    {{-- <td>{{ Str::upper($unit?->semester ?? '---') }}</td> --}}
+                    <td>{{ collect([1=>'I', 2=>'II', 3=>'III', 4=>'IV', 5=>'V', 6=>'VI'])->get((int)($unit?->semester ?? 0), '---') }}</td>
                 </tr>
                 <tr>
                     <td class="text-bold">1.10 FECHA INICIO Y TÉRMINO</td>
