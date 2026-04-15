@@ -9,257 +9,418 @@
 
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
-
-            {{-- BOTÓN DE EXPORTACIÓN --}}
-            @if($activePeriod)
-                <x-button wire:click="$set('showExportModal', true)" class="bg-green-600 hover:bg-green-700">
-                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                    Exportar Horarios
-                </x-button>
-            @endif
-            
-            @if(!$activePeriod)
-                <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow">
-                    <p class="font-bold">No hay periodo académico activo.</p>
-                    <p>Active un periodo para gestionar horarios.</p>
-                </div>
-            @else
-
-            {{-- FILTROS DE SELECCIÓN --}}
-            <div class="bg-white shadow-xl sm:rounded-lg p-6 border-l-4 border-indigo-500">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    
-                    <div>
-                        <x-label value="1. Programa de Estudios" class="mb-1 text-indigo-700 font-bold" />
-                        <select wire:model.live="selectedCareerId" class="w-full border-gray-300 rounded-md shadow-sm">
-                            <option value="">-- Seleccione --</option>
-                            @foreach($careers as $c) 
-                                <option value="{{ $c->id }}">{{ $c->name }}</option> 
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <div class="relative">
-                        <x-label value="2. Unidad Didáctica (Curso)" class="mb-1 text-indigo-700 font-bold" />
-                        <x-input type="text" wire:model.live.debounce.300ms="searchUnit" 
-                                 placeholder="Escriba para buscar..." 
-                                 class="w-full {{ $selectedUnitId ? 'bg-green-50 border-green-500' : '' }}"
-                                 :disabled="!$selectedCareerId" />
-                        
-                        @if(!empty($unitResults))
-                            <div class="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto mt-1">
-                                @foreach($unitResults as $u)
-                                    <div wire:click="selectUnit({{ $u->id }}, '{{ $u->name }}', {{ $u->semester }})"
-                                         class="p-2 hover:bg-indigo-50 cursor-pointer text-sm border-b">
-                                        <span class="font-bold">{{ $u->name }}</span>
-                                        <span class="text-xs text-gray-500 block">Semestre {{ $u->semester }}</span>
-                                    </div>
-                                @endforeach
-                            </div>
-                        @endif
-                    </div>
-
-                    <div>
-                        <x-label value="3. Sección / Docente" class="mb-1 text-indigo-700 font-bold" />
-                        <select wire:model.live="selectedAssignmentId" class="w-full border-gray-300 rounded-md shadow-sm" {{ $sectionAssignments->isEmpty() ? 'disabled' : '' }}>
-                            <option value="">-- Seleccione --</option>
-                            @foreach($sectionAssignments as $sa)
-                                <option value="{{ $sa->id }}">
-                                    Sección {{ $sa->section }} - {{ $sa->shift->name }} ({{ $sa->teacher->user->lastname }})
-                                </option>
-                            @endforeach
-                        </select>
-                    </div>
-                </div>
+            <div class="flex border-b border-gray-200 mb-6 bg-white rounded-t-lg shadow-sm">
+                <button wire:click="setViewMode('unit')" 
+                    class="py-3 px-6 font-medium text-sm focus:outline-none {{ $viewMode === 'unit' ? 'border-b-2 border-indigo-600 text-indigo-600 bg-indigo-50' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50' }}">
+                    <span class="flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                        Gestión por Curso / Sección
+                    </span>
+                </button>
+                <button wire:click="setViewMode('consolidated')" 
+                    class="py-3 px-6 font-medium text-sm focus:outline-none {{ $viewMode === 'consolidated' ? 'border-b-2 border-purple-600 text-purple-600 bg-purple-50' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50' }}">
+                    <span class="flex items-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
+                        Vista Consolidada Semestral
+                    </span>
+                </button>
             </div>
+            @if($viewMode === 'unit')
 
-            {{-- GRID DE HORARIOS --}}
-            @if($selectedAssignment)
-                <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                    
-                    {{-- FORMULARIO AGREGAR BLOQUE --}}
-                    <div class="lg:col-span-1">
-                        <div class="bg-white shadow-xl sm:rounded-lg p-5 sticky top-24">
-                            <h3 class="font-bold text-gray-800 mb-4 border-b pb-2">Agregar Bloque</h3>
+                {{-- BOTÓN DE EXPORTACIÓN --}}
+                @if($activePeriod)
+                    <x-button wire:click="$set('showExportModal', true)" class="bg-green-600 hover:bg-green-700">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        Exportar Horarios
+                    </x-button>
+                @endif
+                
+                @if(!$activePeriod)
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded shadow">
+                        <p class="font-bold">No hay periodo académico activo.</p>
+                        <p>Active un periodo para gestionar horarios.</p>
+                    </div>
+                @else
+
+                {{-- FILTROS DE SELECCIÓN --}}
+                <div class="bg-white shadow-xl sm:rounded-lg p-6 border-l-4 border-indigo-500">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        
+                        <div>
+                            <x-label value="1. Programa de Estudios" class="mb-1 text-indigo-700 font-bold" />
+                            <select wire:model.live="selectedCareerId" class="w-full border-gray-300 rounded-md shadow-sm">
+                                <option value="">-- Seleccione --</option>
+                                @foreach($careers as $c) 
+                                    <option value="{{ $c->id }}">{{ $c->name }}</option> 
+                                @endforeach
+                            </select>
+                        </div>
+
+                        <div class="relative">
+                            <x-label value="2. Unidad Didáctica (Curso)" class="mb-1 text-indigo-700 font-bold" />
+                            <x-input type="text" wire:model.live.debounce.300ms="searchUnit" 
+                                    placeholder="Escriba para buscar..." 
+                                    class="w-full {{ $selectedUnitId ? 'bg-green-50 border-green-500' : '' }}"
+                                    :disabled="!$selectedCareerId" />
                             
-                            <div class="space-y-4">
-                                <div>
-                                    <x-label value="Día" />
-                                    <select wire:model="day_of_week" class="w-full border-gray-300 rounded-md">
-                                        <option value="monday">Lunes</option>
-                                        <option value="tuesday">Martes</option>
-                                        <option value="wednesday">Miércoles</option>
-                                        <option value="thursday">Jueves</option>
-                                        <option value="friday">Viernes</option>
-                                        <option value="saturday">Sábado</option>
-                                    </select>
+                            @if(!empty($unitResults))
+                                <div class="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto mt-1">
+                                    @foreach($unitResults as $u)
+                                        <div wire:click="selectUnit({{ $u->id }}, '{{ $u->name }}', {{ $u->semester }})"
+                                            class="p-2 hover:bg-indigo-50 cursor-pointer text-sm border-b">
+                                            <span class="font-bold">{{ $u->name }}</span>
+                                            <span class="text-xs text-gray-500 block">Semestre {{ $u->semester }}</span>
+                                        </div>
+                                    @endforeach
                                 </div>
+                            @endif
+                        </div>
 
-                                <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <x-label value="3. Sección / Docente" class="mb-1 text-indigo-700 font-bold" />
+                            <select wire:model.live="selectedAssignmentId" class="w-full border-gray-300 rounded-md shadow-sm" {{ $sectionAssignments->isEmpty() ? 'disabled' : '' }}>
+                                <option value="">-- Seleccione --</option>
+                                @foreach($sectionAssignments as $sa)
+                                    <option value="{{ $sa->id }}">
+                                        Sección {{ $sa->section }} - {{ $sa->shift->name }} ({{ $sa->teacher->user->lastname }})
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- GRID DE HORARIOS --}}
+                @if($selectedAssignment)
+                    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                        
+                        {{-- FORMULARIO AGREGAR BLOQUE --}}
+                        <div class="lg:col-span-1">
+                            <div class="bg-white shadow-xl sm:rounded-lg p-5 sticky top-24">
+                                <h3 class="font-bold text-gray-800 mb-4 border-b pb-2">Agregar Bloque</h3>
+                                
+                                <div class="space-y-4">
                                     <div>
-                                        <x-label value="Inicio" />
-                                        <x-input type="time" wire:model="start_time" class="w-full" />
+                                        <x-label value="Día" />
+                                        <select wire:model="day_of_week" class="w-full border-gray-300 rounded-md">
+                                            <option value="monday">Lunes</option>
+                                            <option value="tuesday">Martes</option>
+                                            <option value="wednesday">Miércoles</option>
+                                            <option value="thursday">Jueves</option>
+                                            <option value="friday">Viernes</option>
+                                            <option value="saturday">Sábado</option>
+                                        </select>
                                     </div>
+
+                                    <div class="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <x-label value="Inicio" />
+                                            <x-input type="time" wire:model="start_time" class="w-full" />
+                                        </div>
+                                        <div>
+                                            <x-label value="Fin" />
+                                            <x-input type="time" wire:model="end_time" class="w-full" />
+                                        </div>
+                                    </div>
+                                    <x-input-error for="start_time" />
+                                    <x-input-error for="end_time" />
+
+                                    <div class="flex gap-2 justify-center">
+                                        <button wire:click="setPresetTime('morning')" class="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded hover:bg-yellow-200">Mañana (08-13)</button>
+                                        <button wire:click="setPresetTime('night')" class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200">Noche (17-21)</button>
+                                    </div>
+
                                     <div>
-                                        <x-label value="Fin" />
-                                        <x-input type="time" wire:model="end_time" class="w-full" />
+                                        <x-label value="Aula (Opcional)" />
+                                        <select wire:model="classroom_resource_id" class="w-full border-gray-300 rounded-md text-sm">
+                                            <option value="">-- Sin Aula --</option>
+                                            @foreach($classrooms as $cr)
+                                                <option value="{{ $cr->id }}">{{ $cr->name }} ({{ $cr->type }})</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+
+                                    <button wire:click="addSchedule" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow">
+                                        + Agregar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {{-- GRID SEMANAL --}}
+                        <div class="lg:col-span-3">
+                            <div class="bg-white shadow-xl sm:rounded-lg p-5 overflow-x-auto">
+                                <div class="flex justify-between items-center mb-4">
+                                    <h3 class="font-bold text-gray-800">
+                                        Horario Semanal
+                                    </h3>
+                                    <div class="flex gap-2 text-xs">
+                                        <span class="inline-flex items-center px-2 py-1 rounded bg-blue-100 text-blue-800">
+                                            <span class="w-2 h-2 bg-blue-500 rounded-full mr-1"></span> Mañana
+                                        </span>
+                                        <span class="inline-flex items-center px-2 py-1 rounded bg-purple-100 text-purple-800">
+                                            <span class="w-2 h-2 bg-purple-500 rounded-full mr-1"></span> Noche
+                                        </span>
                                     </div>
                                 </div>
-                                <x-input-error for="start_time" />
-                                <x-input-error for="end_time" />
 
-                                <div class="flex gap-2 justify-center">
-                                    <button wire:click="setPresetTime('morning')" class="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded hover:bg-yellow-200">Mañana (08-13)</button>
-                                    <button wire:click="setPresetTime('night')" class="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded hover:bg-indigo-200">Noche (17-21)</button>
+                                <div class="grid grid-cols-7 gap-2 min-w-[900px]">
+                                    {{-- COLUMNA DE HORAS --}}
+                                    <div class="space-y-[38px] pt-8">
+                                        <div class="text-xs font-semibold text-gray-600 text-center bg-gray-50 p-1 rounded">Hora</div>
+                                        @for($h = 7; $h <= 21; $h++)
+                                            <div class="text-xs text-gray-500 text-center py-1">
+                                                {{ sprintf('%02d:00', $h) }}
+                                            </div>
+                                        @endfor
+                                    </div>
+
+                                    {{-- DÍAS DE LA SEMANA --}}
+                                    @foreach(['monday' => 'Lunes', 'tuesday' => 'Martes', 'wednesday' => 'Miércoles', 'thursday' => 'Jueves', 'friday' => 'Viernes', 'saturday' => 'Sábado'] as $dayKey => $dayLabel)
+                                        <div>
+                                            {{-- Header del día --}}
+                                            <div class="text-center font-bold bg-gradient-to-r from-indigo-100 to-blue-100 p-2 rounded text-sm text-gray-700 mb-2 shadow-sm">
+                                                {{ $dayLabel }}
+                                            </div>
+
+                                            {{-- Contenedor de bloques con altura proporcional --}}
+                                            <div class="relative min-h-[560px] bg-gray-50 p-2 rounded border border-gray-200">
+                                                {{-- Líneas guía de horas (fondo sutil) --}}
+                                                <div class="absolute inset-0 grid grid-rows-15 pointer-events-none">
+                                                    @for($h = 7; $h <= 21; $h++)
+                                                        <div class="border-t border-gray-200 border-dashed opacity-30"></div>
+                                                    @endfor
+                                                </div>
+
+                                                {{-- Bloques de horario --}}
+                                                @php
+                                                    $daySchedules = $currentSchedules->where('day_of_week', $dayKey)->sortBy('start_time');
+                                                @endphp
+
+                                                @foreach($daySchedules as $sched)
+                                                    @php
+                                                        // Determinar turno por hora
+                                                        $startHour = (int)$sched->start_time->format('H');
+                                                        $isMorning = $startHour >= 7 && $startHour < 14;
+                                                        $shiftClass = $isMorning 
+                                                            ? 'border-blue-500 bg-blue-50 text-blue-900' 
+                                                            : 'border-purple-500 bg-purple-50 text-purple-900';
+                                                        
+                                                        // Calcular posición vertical (proporcional a la hora)
+                                                        $topPercent = (($startHour - 7) / 14) * 100;
+                                                        $duration = $sched->start_time->diffInMinutes($sched->end_time);
+                                                        $heightPercent = ($duration / 60 / 14) * 100;
+                                                    @endphp
+
+                                                    <div class="relative z-10 border-l-4 {{ $shiftClass }} shadow-sm p-2 rounded mb-2 group hover:shadow-md hover:scale-105 transition-all duration-200"
+                                                        style="margin-top: {{ $topPercent }}%;">
+                                                        
+                                                        {{-- Horario --}}
+                                                        <div class="text-sm font-bold flex items-center">
+                                                            <svg class="w-3 h-3 mr-1 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                                            </svg>
+                                                            {{ $sched->start_time->format('H:i') }} - {{ $sched->end_time->format('H:i') }}
+                                                        </div>
+                                                        
+                                                        {{-- Aula --}}
+                                                        <div class="text-xs opacity-75 mt-1 flex items-center">
+                                                            <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                                            </svg>
+                                                            {{ $sched->classroomResource->name ?? 'Sin Aula' }}
+                                                        </div>
+
+                                                        {{-- Badge de turno --}}
+                                                        <div class="text-xs font-semibold mt-1 opacity-60">
+                                                            {{ $isMorning ? '☀️ Mañana' : '🌙 Noche' }}
+                                                        </div>
+
+                                                        {{-- Botón eliminar (visible al hover) --}}
+                                                        <button wire:click="deleteSchedule({{ $sched->id }})" 
+                                                                wire:confirm="¿Eliminar este bloque de horario?"
+                                                                class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-600">
+                                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                                            </svg>
+                                                        </button>
+                                                    </div>
+                                                @endforeach
+                                                
+                                                {{-- Estado vacío --}}
+                                                @if($daySchedules->isEmpty())
+                                                    <div class="absolute inset-0 flex items-center justify-center">
+                                                        <div class="text-center text-gray-300">
+                                                            <svg class="mx-auto h-8 w-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                                            </svg>
+                                                            <p class="text-xs italic">Sin horarios</p>
+                                                        </div>
+                                                    </div>
+                                                @endif
+                                            </div>
+                                        </div>
+                                    @endforeach
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                @else
+                    <div class="text-center py-12 bg-white rounded-lg shadow border border-dashed border-gray-300">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <h3 class="mt-2 text-sm font-medium text-gray-900">Seleccione un curso y sección</h3>
+                        <p class="mt-1 text-sm text-gray-500">Use los filtros superiores para comenzar a programar.</p>
+                    </div>
+                @endif
 
-                                <div>
-                                    <x-label value="Aula (Opcional)" />
-                                    <select wire:model="classroom_resource_id" class="w-full border-gray-300 rounded-md text-sm">
-                                        <option value="">-- Sin Aula --</option>
-                                        @foreach($classrooms as $cr)
-                                            <option value="{{ $cr->id }}">{{ $cr->name }} ({{ $cr->type }})</option>
-                                        @endforeach
-                                    </select>
-                                </div>
+                @endif {{-- FIN DEL IF DE activePeriod --}}
+            @else
+                
+                {{-- NUEVA VISTA CONSOLIDADA SEMESTRAL --}}
+                <div class="space-y-6">
+                    
+                    {{-- Filtros Consolidados --}}
+                    <div class="bg-white shadow-xl sm:rounded-lg p-6 border-l-4 border-purple-500">
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div>
+                                <x-label value="1. Programa de Estudios" class="text-purple-700 font-bold" />
+                                <select wire:model.live="selectedCareerId" class="w-full border-gray-300 rounded-md mt-1">
+                                    <option value="">-- Seleccione --</option>
+                                    @foreach($careers as $c) 
+                                        <option value="{{ $c->id }}">{{ $c->name }}</option> 
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <x-label value="2. Semestre / Ciclo" class="text-purple-700 font-bold" />
+                                <select wire:model.live="filterCycleId" class="w-full border-gray-300 rounded-md mt-1" {{ !$selectedCareerId ? 'disabled' : '' }}>
+                                    <option value="">-- Seleccione --</option>
+                                    @for($i = 1; $i <= 6; $i++)
+                                        <option value="{{ $i }}">Semestre {{ $i }}</option>
+                                    @endfor
+                                </select>
+                            </div>
+                            <div>
+                                <x-label value="3. Turno" class="text-purple-700 font-bold" />
+                                <select wire:model.live="filterShiftId" class="w-full border-gray-300 rounded-md mt-1" {{ !$filterCycleId ? 'disabled' : '' }}>
+                                    <option value="">-- Seleccione --</option>
+                                    @foreach($shifts as $s)
+                                        <option value="{{ $s->id }}">{{ $s->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                {{-- Botón de Exportar Excel (Apunta a una ruta que crearemos luego en el Paso 3/4) --}}
+                                @if($selectedCareerId && $filterCycleId && $filterShiftId)
+                                    <div class="flex gap-2">
+                                        {{-- Botón Excel --}}
+                                        <a href="{{ route('academic-process.schedules.export-consolidated', [
+                                            'career' => $selectedCareerId, 
+                                            'cycle' => $filterCycleId, 
+                                            'shift' => $filterShiftId,
+                                            'period_id' => $activePeriod->id
+                                        ]) }}" class="bg-green-600 text-white px-3 py-2 rounded text-xs font-bold uppercase tracking-widest">
+                                            Descargar Excel
+                                        </a>
 
-                                <button wire:click="addSchedule" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow">
-                                    + Agregar
-                                </button>
+                                        {{-- Botón PDF --}}
+                                        <a href="{{ route('academic-process.schedules.export-consolidated-pdf', [
+                                            'career' => $selectedCareerId, 
+                                            'cycle' => $filterCycleId, 
+                                            'shift' => $filterShiftId,
+                                            'period_id' => $activePeriod->id
+                                        ]) }}" class="bg-red-600 text-white px-3 py-2 rounded text-xs font-bold uppercase tracking-widest">
+                                            Descargar PDF
+                                        </a>
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     </div>
 
-                    {{-- GRID SEMANAL --}}
-                    <div class="lg:col-span-3">
-                        <div class="bg-white shadow-xl sm:rounded-lg p-5 overflow-x-auto">
-                            <div class="flex justify-between items-center mb-4">
-                                <h3 class="font-bold text-gray-800">
-                                    Horario Semanal
-                                </h3>
-                                <div class="flex gap-2 text-xs">
-                                    <span class="inline-flex items-center px-2 py-1 rounded bg-blue-100 text-blue-800">
-                                        <span class="w-2 h-2 bg-blue-500 rounded-full mr-1"></span> Mañana
-                                    </span>
-                                    <span class="inline-flex items-center px-2 py-1 rounded bg-purple-100 text-purple-800">
-                                        <span class="w-2 h-2 bg-purple-500 rounded-full mr-1"></span> Noche
-                                    </span>
+                    @if($selectedCareerId && $filterCycleId && $filterShiftId)
+                        {{-- Indicadores de Avance --}}
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-blue-500">
+                                <p class="text-sm text-gray-500 font-semibold">Cursos del Semestre</p>
+                                <p class="text-2xl font-bold text-gray-800">{{ $this->progressStats['total_courses'] }}</p>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-500">
+                                <p class="text-sm text-gray-500 font-semibold">Cursos Programados (Este Turno)</p>
+                                <p class="text-2xl font-bold text-gray-800">{{ $this->progressStats['scheduled_courses'] }}</p>
+                            </div>
+                            <div class="bg-white rounded-lg shadow p-4 border-l-4 border-green-500">
+                                <p class="text-sm text-gray-500 font-semibold">Avance de Programación</p>
+                                <div class="flex items-center mt-1">
+                                    <div class="w-full bg-gray-200 rounded-full h-2.5 mr-2">
+                                        <div class="bg-green-600 h-2.5 rounded-full" style="width: {{ $this->progressStats['percentage'] }}%"></div>
+                                    </div>
+                                    <span class="text-sm font-bold text-gray-700">{{ $this->progressStats['percentage'] }}%</span>
                                 </div>
                             </div>
+                        </div>
 
-                            <div class="grid grid-cols-7 gap-2 min-w-[900px]">
-                                {{-- COLUMNA DE HORAS --}}
-                                <div class="space-y-[38px] pt-8">
+                        {{-- Grilla Maestra --}}
+                        <div class="bg-white shadow-xl sm:rounded-lg p-5 overflow-x-auto">
+                            <div class="grid grid-cols-7 gap-2 min-w-[1000px]">
+                                {{-- Columna Horas --}}
+                                <div class="space-y-[60px] pt-8">
                                     <div class="text-xs font-semibold text-gray-600 text-center bg-gray-50 p-1 rounded">Hora</div>
                                     @for($h = 7; $h <= 21; $h++)
-                                        <div class="text-xs text-gray-500 text-center py-1">
-                                            {{ sprintf('%02d:00', $h) }}
-                                        </div>
+                                        <div class="text-xs text-gray-500 text-center py-1 border-t">{{ sprintf('%02d:00', $h) }}</div>
                                     @endfor
                                 </div>
 
-                                {{-- DÍAS DE LA SEMANA --}}
+                                {{-- Días --}}
                                 @foreach(['monday' => 'Lunes', 'tuesday' => 'Martes', 'wednesday' => 'Miércoles', 'thursday' => 'Jueves', 'friday' => 'Viernes', 'saturday' => 'Sábado'] as $dayKey => $dayLabel)
                                     <div>
-                                        {{-- Header del día --}}
-                                        <div class="text-center font-bold bg-gradient-to-r from-indigo-100 to-blue-100 p-2 rounded text-sm text-gray-700 mb-2 shadow-sm">
-                                            {{ $dayLabel }}
-                                        </div>
-
-                                        {{-- Contenedor de bloques con altura proporcional --}}
-                                        <div class="relative min-h-[560px] bg-gray-50 p-2 rounded border border-gray-200">
-                                            {{-- Líneas guía de horas (fondo sutil) --}}
-                                            <div class="absolute inset-0 grid grid-rows-15 pointer-events-none">
-                                                @for($h = 7; $h <= 21; $h++)
-                                                    <div class="border-t border-gray-200 border-dashed opacity-30"></div>
-                                                @endfor
-                                            </div>
-
-                                            {{-- Bloques de horario --}}
+                                        <div class="text-center font-bold bg-purple-100 p-2 rounded text-sm text-purple-900 mb-2">{{ $dayLabel }}</div>
+                                        <div class="relative min-h-[850px] bg-gray-50 p-2 rounded border border-gray-200">
                                             @php
-                                                $daySchedules = $currentSchedules->where('day_of_week', $dayKey)->sortBy('start_time');
+                                                $daySchedules = $this->consolidatedSchedule->get($dayKey, collect());
                                             @endphp
 
                                             @foreach($daySchedules as $sched)
                                                 @php
-                                                    // Determinar turno por hora
                                                     $startHour = (int)$sched->start_time->format('H');
-                                                    $isMorning = $startHour >= 7 && $startHour < 14;
-                                                    $shiftClass = $isMorning 
-                                                        ? 'border-blue-500 bg-blue-50 text-blue-900' 
-                                                        : 'border-purple-500 bg-purple-50 text-purple-900';
-                                                    
-                                                    // Calcular posición vertical (proporcional a la hora)
-                                                    $topPercent = (($startHour - 7) / 14) * 100;
-                                                    $duration = $sched->start_time->diffInMinutes($sched->end_time);
-                                                    $heightPercent = ($duration / 60 / 14) * 100;
+                                                    $startMin = (int)$sched->start_time->format('i');
+                                                    $topPercent = (($startHour - 7) + ($startMin / 60)) / 15 * 100;
                                                 @endphp
 
-                                                <div class="relative z-10 border-l-4 {{ $shiftClass }} shadow-sm p-2 rounded mb-2 group hover:shadow-md hover:scale-105 transition-all duration-200"
-                                                    style="margin-top: {{ $topPercent }}%;">
-                                                    
-                                                    {{-- Horario --}}
-                                                    <div class="text-sm font-bold flex items-center">
-                                                        <svg class="w-3 h-3 mr-1 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                                        </svg>
-                                                        {{ $sched->start_time->format('H:i') }} - {{ $sched->end_time->format('H:i') }}
+                                                <div class="absolute w-[95%] border-l-4 border-purple-500 bg-white shadow-md p-2 rounded z-10 text-xs overflow-hidden hover:z-20 hover:scale-105 transition-all"
+                                                     style="top: {{ $topPercent }}%;">
+                                                    <div class="font-bold text-purple-800 line-clamp-2" title="{{ $sched->teacherAssignment->didacticUnit->name }}">
+                                                        {{ $sched->teacherAssignment->didacticUnit->name }}
                                                     </div>
-                                                    
-                                                    {{-- Aula --}}
-                                                    <div class="text-xs opacity-75 mt-1 flex items-center">
-                                                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/>
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/>
-                                                        </svg>
-                                                        {{ $sched->classroomResource->name ?? 'Sin Aula' }}
+                                                    <div class="text-gray-600 mt-1 font-semibold">
+                                                        🕒 {{ $sched->start_time->format('H:i') }} - {{ $sched->end_time->format('H:i') }}
                                                     </div>
-
-                                                    {{-- Badge de turno --}}
-                                                    <div class="text-xs font-semibold mt-1 opacity-60">
-                                                        {{ $isMorning ? '☀️ Mañana' : '🌙 Noche' }}
+                                                    <div class="text-gray-600 truncate mt-1">
+                                                        👨‍🏫 {{ $sched->teacherAssignment->teacher->user->lastname }}
                                                     </div>
-
-                                                    {{-- Botón eliminar (visible al hover) --}}
-                                                    <button wire:click="deleteSchedule({{ $sched->id }})" 
-                                                            wire:confirm="¿Eliminar este bloque de horario?"
-                                                            class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-600">
-                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                                                        </svg>
-                                                    </button>
+                                                    <div class="text-gray-500 font-medium">
+                                                        📍 {{ $sched->classroomResource->name ?? 'Sin aula' }}
+                                                    </div>
                                                 </div>
                                             @endforeach
-                                            
-                                            {{-- Estado vacío --}}
-                                            @if($daySchedules->isEmpty())
-                                                <div class="absolute inset-0 flex items-center justify-center">
-                                                    <div class="text-center text-gray-300">
-                                                        <svg class="mx-auto h-8 w-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                                        </svg>
-                                                        <p class="text-xs italic">Sin horarios</p>
-                                                    </div>
-                                                </div>
-                                            @endif
                                         </div>
                                     </div>
                                 @endforeach
                             </div>
                         </div>
-                    </div>
+                    @else
+                        <div class="text-center py-12 bg-white rounded-lg shadow border border-dashed border-gray-300">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            <h3 class="mt-2 text-sm font-medium text-gray-900">Seleccione los filtros</h3>
+                            <p class="mt-1 text-sm text-gray-500">Seleccione Programa, Semestre y Turno para ver el horario maestro.</p>
+                        </div>
+                    @endif
                 </div>
-            @else
-                <div class="text-center py-12 bg-white rounded-lg shadow border border-dashed border-gray-300">
-                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    <h3 class="mt-2 text-sm font-medium text-gray-900">Seleccione un curso y sección</h3>
-                    <p class="mt-1 text-sm text-gray-500">Use los filtros superiores para comenzar a programar.</p>
-                </div>
-            @endif
 
-            @endif {{-- FIN DEL IF DE activePeriod --}}
+            @endif
         </div>
     </div>
 

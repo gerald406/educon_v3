@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\TeacherScheduleExport;
 use App\Exports\CareerScheduleExport;
+use App\Exports\SemesterScheduleExport;
 
 class ScheduleReportController extends Controller
 {
@@ -250,5 +251,53 @@ class ScheduleReportController extends Controller
             new CareerScheduleExport($careerId, $period->id, $semester, $shiftId),
             $filename
         );
+    }
+
+    // ==========================================
+    // NUEVOS REPORTES: VISTA CONSOLIDADA DIRECTA
+    // ==========================================
+
+    public function exportConsolidated(Request $request)
+    {
+        $careerId = $request->query('career');
+        $cycle = $request->query('cycle');
+        $shiftId = $request->query('shift');
+        $periodId = $request->query('period_id');
+
+        $fileName = "Horario_Excel_Ciclo_{$cycle}.xlsx";
+
+        return Excel::download(new SemesterScheduleExport($careerId, $cycle, $shiftId, $periodId), $fileName);
+    }
+
+    public function exportConsolidatedPdf(Request $request)
+    {
+        $careerId = $request->query('career');
+        $cycle = $request->query('cycle');
+        $shiftId = $request->query('shift');
+        $periodId = $request->query('period_id');
+
+        // Recuperamos la data (misma lógica que en Livewire)
+        $schedules = Schedule::with(['teacherAssignment.teacher.user', 'teacherAssignment.didacticUnit', 'classroomResource'])
+            ->whereHas('teacherAssignment', function ($q) use ($periodId, $shiftId, $cycle, $careerId) {
+                $q->where('academic_period_id', $periodId)
+                    ->where('shift_id', $shiftId)
+                    ->whereHas('didacticUnit', function ($q2) use ($cycle, $careerId) {
+                        $q2->where('semester', $cycle)
+                            ->whereHas('module.studyPlan', fn($q3) => $q3->where('career_id', $careerId));
+                    });
+            })->get()->groupBy('day_of_week');
+
+        $data = [
+            'schedules' => $schedules,
+            'career' => Career::find($careerId),
+            'shift' => Shift::find($shiftId),
+            'cycle' => $cycle,
+            'period' => AcademicPeriod::find($periodId)
+        ];
+
+        $pdf = Pdf::loadView('reports.schedules.consolidated-export', $data)
+            ->setPaper('a4', 'landscape');
+
+        return $pdf->download("Horario_Consolidado_Ciclo_{$cycle}.pdf");
     }
 }

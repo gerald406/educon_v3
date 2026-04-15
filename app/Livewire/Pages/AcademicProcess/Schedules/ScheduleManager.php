@@ -62,6 +62,13 @@ class ScheduleManager extends Component
     public $exportShiftId = '';
 
     // ==========================================
+    // PROPIEDADES - VISTA CONSOLIDADA
+    // ==========================================
+    public $viewMode = 'unit'; // 'unit' (actual) o 'consolidated'
+    public $filterCycleId = ''; // Semestre o Ciclo seleccionado
+    public $filterShiftId = ''; // Turno seleccionado
+
+    // ==========================================
     // INICIALIZACIÓN
     // ==========================================
 
@@ -313,6 +320,87 @@ class ScheduleManager extends Component
         }
 
         return false;
+    }
+
+    // ==========================================
+    // NUEVA VISTA CONSOLIDADA SEMESTRAL
+    // ==========================================
+
+    /**
+     * Alternar entre vista por Unidad o Consolidada
+     */
+    public function setViewMode($mode)
+    {
+        $this->viewMode = $mode;
+        $this->resetValidation();
+    }
+
+    /**
+     * Obtener el horario de todo el semestre/turno agrupado por días
+     */
+    #[Computed]
+    public function consolidatedSchedule()
+    {
+        if (!$this->selectedCareerId || !$this->filterCycleId || !$this->filterShiftId || !$this->activePeriod) {
+            return collect();
+        }
+
+        // Buscar todos los horarios que coincidan con Programa, Semestre y Turno
+        $schedules = Schedule::with([
+            'teacherAssignment.teacher.user',
+            'teacherAssignment.didacticUnit',
+            'classroomResource'
+        ])
+            ->whereHas('teacherAssignment', function ($q) {
+                $q->where('academic_period_id', $this->activePeriod->id)
+                    ->where('shift_id', $this->filterShiftId) // Filtro por Turno
+                    ->whereHas('didacticUnit', function ($q2) {
+                        $q2->where('semester', $this->filterCycleId) // Filtro por Semestre
+                            ->whereHas('module.studyPlan', function ($q3) {
+                                $q3->where('career_id', $this->selectedCareerId); // Filtro por Programa
+                            });
+                    });
+            })
+            ->orderBy('start_time')
+            ->get();
+
+        // Retornar agrupado por día de la semana
+        return $schedules->groupBy('day_of_week');
+    }
+
+    /**
+     * Indicadores rápidos para la vista consolidada
+     */
+    #[Computed]
+    public function progressStats()
+    {
+        if (!$this->selectedCareerId || !$this->filterCycleId || !$this->activePeriod) {
+            return ['total_courses' => 0, 'scheduled_courses' => 0];
+        }
+
+        // Total de cursos del semestre
+        $totalCourses = DidacticUnit::where('semester', $this->filterCycleId)
+            ->where('status', 'active')
+            ->whereHas('module.studyPlan', function ($q) {
+                $q->where('career_id', $this->selectedCareerId);
+            })->count();
+
+        // Cursos que ya tienen asignación docente y al menos un horario en este turno
+        $scheduledCourses = TeacherAssignment::where('academic_period_id', $this->activePeriod->id)
+            ->where('shift_id', $this->filterShiftId)
+            ->whereHas('schedules')
+            ->whereHas('didacticUnit', function ($q) {
+                $q->where('semester', $this->filterCycleId)
+                    ->whereHas('module.studyPlan', function ($q2) {
+                        $q2->where('career_id', $this->selectedCareerId);
+                    });
+            })->count();
+
+        return [
+            'total_courses' => $totalCourses,
+            'scheduled_courses' => $scheduledCourses,
+            'percentage' => $totalCourses > 0 ? round(($scheduledCourses / $totalCourses) * 100) : 0
+        ];
     }
 
     /**

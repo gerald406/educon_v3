@@ -86,6 +86,7 @@ use App\Livewire\Pages\Security\UserManager;
 use App\Livewire\Pages\Teacher\LearningSessionEditor;
 use App\Livewire\Pages\Teacher\LearningSessionList;
 use App\Livewire\Pages\Teacher\SyllabusEditor;
+use App\Livewire\Pages\Public\ScheduleViewer;
 
 
 /*
@@ -169,6 +170,12 @@ Route::prefix('academic-process')->middleware(['auth', 'verified'])->name('acade
 
     Route::get('schedules/export', [ScheduleReportController::class, 'downloadPDF'])
         ->name('schedules.export');
+    // Rutas para exportación consolidada
+    Route::get('schedules/export-consolidated', [ScheduleReportController::class, 'exportConsolidated'])
+        ->name('schedules.export-consolidated');
+
+    Route::get('schedules/export-consolidated-pdf', [ScheduleReportController::class, 'exportConsolidatedPdf'])
+        ->name('schedules.export-consolidated-pdf');
 
     Route::get('syllabus-approval', SyllabusApproval::class)->middleware('permission:aprobar-silabos')->name('syllabus-approval');
     Route::get('reservations', EnrollmentReservationManager::class)
@@ -328,3 +335,6 @@ Route::prefix('admission/exam')->name('admission.exam.')->group(function () {
     Route::post('attendance/register/{assignment}', [ExamAttendanceController::class, 'register'])
         ->name('attendance.register');
 });
+
+// Ruta Pública de Horarios (Para monitoreo docente)
+Route::get('/horarios', ScheduleViewer::class)->name('public.schedules');
