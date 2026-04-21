@@ -68,8 +68,10 @@ class AdmissionRankingExport implements FromCollection, WithHeadings, WithStyles
             return [
                 'posicion'            => $position,
                 'dni'                 => $applicant->user->document_number,
-                'apellidos_nombre'    => $applicant->user->lastname . ', ' . $applicant->user->name,
+                'apellidos'           => $applicant->user->lastname,
+                'nombres'             => $applicant->user->name,
                 'celular'             => $applicant->phone,
+                'email'               => $applicant->user->email,
                 'direccion'           => $applicant->address,
                 'genero'              => $applicant->gender,
                 'fecha_nacimiento'    => $applicant->birthday?->format('d/m/Y'),
@@ -77,7 +79,7 @@ class AdmissionRankingExport implements FromCollection, WithHeadings, WithStyles
                 'departamento'        => $applicant->birthLocation->nombdep ?? null,
                 'provincia'           => $applicant->birthLocation->nombprov ?? null,
                 'distrito'            => $applicant->birthLocation->nombdist ?? null,
-                'foto_url'            => $applicant->photo_url,
+                'foto_url'            => $applicant->photo_url ? route('applicant.photo', ['dni' => $applicant->user->document_number]) : 'Sin foto',
                 'colegio'             => $applicant->originSchool->name ?? null,
                 'codigo_modular'      => $applicant->originSchool->modular_code ?? null,
                 'ubigeo_colegio'      => $applicant->originSchool->ubigeo_code ?? null,
@@ -103,8 +105,10 @@ class AdmissionRankingExport implements FromCollection, WithHeadings, WithStyles
             [
                 'N°',
                 'DNI',
-                'Apellidos y Nombres',
+                'Apellidos', // <-- COLUMNA SEPARADA
+                'Nombres',   // <-- COLUMNA SEPARADA
                 'Celular',
+                'Correo Electrónico',
                 'Dirección',
                 'Género',
                 'Fecha Nac.',
@@ -138,8 +142,8 @@ class AdmissionRankingExport implements FromCollection, WithHeadings, WithStyles
             'font' => ['bold' => true],
         ]);
 
-        // Cabecera de columnas (fila 7, columnas A:U)
-        $sheet->getStyle('A7:U7')->applyFromArray([
+        // Cabecera de columnas (fila 7, columnas A:W) -> Se extendió hasta la W
+        $sheet->getStyle('A7:W7')->applyFromArray([
             'font'      => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill'      => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '1E3A5F']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
@@ -149,29 +153,28 @@ class AdmissionRankingExport implements FromCollection, WithHeadings, WithStyles
         // Datos
         $lastRow = $sheet->getHighestRow();
         if ($lastRow > 7) {
-            $sheet->getStyle("A8:U{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A8:W{$lastRow}")->applyFromArray([ // Extendimos hasta la W
                 'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'D1D5DB']]],
             ]);
 
-            // Colorear filas según estado (columna U = "Estado")
+            // Colorear filas según estado (columna W = "Estado")
             for ($row = 8; $row <= $lastRow; $row++) {
-                $estado = $sheet->getCell("U{$row}")->getValue();
+                $estado = $sheet->getCell("W{$row}")->getValue(); // Ahora el estado está en la W
                 if ($estado === 'INGRESÓ') {
-                    $sheet->getStyle("A{$row}:U{$row}")->applyFromArray([
+                    $sheet->getStyle("A{$row}:W{$row}")->applyFromArray([
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'D1FAE5']],
                     ]);
                 } else {
-                    $sheet->getStyle("A{$row}:U{$row}")->applyFromArray([
+                    $sheet->getStyle("A{$row}:W{$row}")->applyFromArray([
                         'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEE2E2']],
                     ]);
                 }
             }
         }
 
-        // Centrar columnas cortas: N°(A), DNI(B), Celular(D), Género(F),
-        // Fecha Nac.(G), Ubigeo Nac.(H), Código Modular(N), Ubigeo Colegio(O),
-        // Año Egreso(P), Nota(T), Estado(U)
-        $centered = ['A', 'B', 'D', 'F', 'G', 'H', 'N', 'O', 'P', 'T', 'U'];
+        // Centrar columnas cortas: 
+        // Actualizadas debido a la separación de Apellidos(C) y Nombres(D)
+        $centered = ['A', 'B', 'E', 'H', 'I', 'J', 'P', 'Q', 'R', 'V', 'W'];
         foreach ($centered as $col) {
             $sheet->getStyle("{$col}7:{$col}{$lastRow}")
                   ->getAlignment()

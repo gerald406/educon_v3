@@ -26,6 +26,43 @@ class SyllabusApproval extends Component
     // --- Carrera del coordinador autenticado ---
     public ?int $coordinatorCareerId = null;
 
+    // --- Control de Pestañas ---
+    public string $activeTab = 'pending'; // 'pending' (Por aprobar) | 'approved' (Aprobados)
+
+    // Método para cambiar de pestaña y resetear la paginación
+    public function setTab($tab)
+    {
+        $this->activeTab = $tab;
+        $this->resetPage();
+    }
+
+    // Método para forzar el cambio de estado de un sílabo
+    public function changeStatus(Syllabus $syllabus, string $newStatus)
+    {
+        // Validación de permisos
+        if (!$this->syllabusBelongsToCoordinator($syllabus)) {
+            $this->dispatch('swal', [
+                'icon'  => 'error',
+                'title' => 'Acceso Denegado',
+                'text'  => 'No tienes permiso para modificar este sílabo.',
+            ]);
+            return;
+        }
+
+        // Actualizar estado
+        $syllabus->update([
+            'status' => $newStatus,
+            'approved_at' => ($newStatus === 'approved') ? now() : null,
+            'approved_by' => ($newStatus === 'approved') ? Auth::id() : null,
+        ]);
+
+        $this->dispatch('swal', [
+            'icon'  => 'success',
+            'title' => 'Estado Actualizado',
+            'text'  => 'El estado del sílabo se cambió a: ' . strtoupper($newStatus),
+        ]);
+    }
+
     public function mount()
     {
         $this->activePeriod = AcademicPeriod::where('status', 'active')->first();
@@ -194,24 +231,35 @@ class SyllabusApproval extends Component
     // ============================================
     // RENDER
     // ============================================
-
     public function render()
     {
         $syllabi = collect();
 
         if ($this->activePeriod) {
 
-            $query = Syllabus::pendingApproval() // scope: where status = 'submitted'
-                ->whereHas('teacherAssignment', function ($q) {
-                    $q->where('academic_period_id', $this->activePeriod->id);
-                })
+            // 1. Iniciamos la consulta base
+            $query = Syllabus::whereHas('teacherAssignment', function ($q) {
+                $q->where('academic_period_id', $this->activePeriod->id);
+            })
                 ->with([
                 'teacherAssignment.teacher.user',
                 'teacherAssignment.didacticUnit.module.studyPlan.career',
                 'teacherAssignment.shift',
                 ]);
 
-            // Filtrar por carrera del coordinador (salvo Administrador)
+            // 2. Filtrar según la pestaña activa (INCLUYENDO BORRADORES)
+            if ($this->activeTab === 'pending') {
+                // Pendientes: Mostrar los enviados y los que devolviste como observados
+                $query->whereIn('status', ['submitted', 'observed']);
+            } elseif ($this->activeTab === 'approved') {
+                // Aprobados
+                $query->where('status', 'approved');
+            } elseif ($this->activeTab === 'drafts') {
+                // Borradores: En edición por el docente
+                $query->where('status', 'draft');
+            }
+
+            // 3. Filtrar por carrera del coordinador (salvo Administrador)
             if (!Auth::user()->hasRole('Administrador') && $this->coordinatorCareerId) {
                 $query->whereHas(
                     'teacherAssignment.didacticUnit.module.studyPlan',
@@ -219,7 +267,7 @@ class SyllabusApproval extends Component
                 );
             }
 
-            // Búsqueda por nombre de curso o docente
+            // 4. Búsqueda por nombre de curso o docente
             if ($this->search) {
                 $query->where(function ($q) {
                     $q->whereHas(
@@ -233,7 +281,8 @@ class SyllabusApproval extends Component
                 });
             }
 
-            $syllabi = $query->orderBy('submitted_at', 'asc')->paginate(10);
+            // Ordenamos por fecha de última actualización (sirve para todos los estados)
+            $syllabi = $query->orderBy('updated_at', 'desc')->paginate(10);
         }
 
         return view('livewire.pages.academic-process.syllabus-approval', [

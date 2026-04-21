@@ -87,6 +87,7 @@ use App\Livewire\Pages\Teacher\LearningSessionEditor;
 use App\Livewire\Pages\Teacher\LearningSessionList;
 use App\Livewire\Pages\Teacher\SyllabusEditor;
 use App\Livewire\Pages\Public\ScheduleViewer;
+use App\Http\Controllers\ApplicantPhotoController; // <-- Agrega esta línea
 
 
 /*
@@ -338,3 +339,4 @@ Route::prefix('admission/exam')->name('admission.exam.')->group(function () {
 
 // Ruta Pública de Horarios (Para monitoreo docente)
 Route::get('/horarios', ScheduleViewer::class)->name('public.schedules');
+Route::get('/photo/{dni}', [ApplicantPhotoController::class, 'show'])->name('applicant.photo');

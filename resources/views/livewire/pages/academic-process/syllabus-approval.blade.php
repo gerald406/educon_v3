@@ -63,164 +63,128 @@
                     @else
                         {{-- CONTENIDO PRINCIPAL --}}
 
-                        {{-- Barra de búsqueda --}}
-                        <div class="flex justify-between items-center mb-6">
-                            <x-input
-                                type="text"
-                                wire:model.live.debounce.300ms="search"
-                                placeholder="Buscar por curso o docente..."
-                                class="w-1/2" />
+                        <div class="bg-white overflow-hidden shadow-xl sm:rounded-lg">
+                            <div class="p-6 border-b border-gray-200">
+                                <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                                    <div class="w-full md:w-1/3">
+                                        <x-input type="text" wire:model.live.debounce.300ms="search" 
+                                                placeholder="Buscar curso o docente..." class="w-full" />
+                                    </div>
 
-                            <span class="text-sm text-gray-500">
-                                {{ $syllabi->total() }} sílabo(s) pendiente(s)
-                            </span>
-                        </div>
+                                    <div class="flex bg-gray-100 p-1 rounded-lg">
+                                        <button wire:click="setTab('pending')" 
+                                            class="px-4 py-2 text-sm font-medium rounded-md transition-all {{ $activeTab === 'pending' ? 'bg-white shadow text-indigo-600' : 'text-gray-500 hover:text-gray-700' }}">
+                                            Por Aprobar
+                                        </button>
+                                        <button wire:click="setTab('approved')" 
+                                            class="px-4 py-2 text-sm font-medium rounded-md transition-all {{ $activeTab === 'approved' ? 'bg-white shadow text-emerald-600' : 'text-gray-500 hover:text-gray-700' }}">
+                                            Aprobados
+                                        </button>
+                                        <button wire:click="setTab('drafts')" 
+                                            class="px-4 py-2 text-sm font-medium rounded-md transition-all {{ $activeTab === 'drafts' ? 'bg-white shadow text-gray-800' : 'text-gray-500 hover:text-gray-700' }}">
+                                            Borradores (En edición)
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
 
-                        {{-- Tabla --}}
-                        <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-200">
-                                <thead class="bg-gray-50">
-                                    <tr>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Curso
-                                        </th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Docente
-                                        </th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Carrera / Sección
-                                        </th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Enviado
-                                        </th>
-                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Vista Previa
-                                        </th>
-                                        <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                            Acciones
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody class="bg-white divide-y divide-gray-200">
-                                    @forelse($syllabi as $syllabus)
-                                        @php
-                                            $assignment = $syllabus->teacherAssignment;
-                                            $career     = $assignment->didacticUnit
-                                                            ?->module
-                                                            ?->studyPlan
-                                                            ?->career;
-                                        @endphp
-                                        <tr class="hover:bg-gray-50 transition-colors">
-
-                                            {{-- Curso --}}
-                                            <td class="px-6 py-4">
-                                                <div class="text-sm font-medium text-gray-900">
-                                                    {{ $assignment->didacticUnit->name ?? '—' }}
-                                                </div>
-                                                <div class="text-xs text-gray-400 mt-0.5">
-                                                    Sem. {{ $assignment->didacticUnit->semester ?? '—' }}
-                                                </div>
-                                            </td>
-
-                                            {{-- Docente --}}
-                                            <td class="px-6 py-4">
-                                                <div class="text-sm text-gray-900">
-                                                    {{ trim(($assignment->teacher->user->name ?? '') . ' ' . ($assignment->teacher->user->lastname ?? '')) }}
-                                                </div>
-                                                <div class="text-xs text-gray-400 mt-0.5">
-                                                    {{ $assignment->teacher->user->email ?? '—' }}
-                                                </div>
-                                            </td>
-
-                                            {{-- Carrera / Sección --}}
-                                            <td class="px-6 py-4">
-                                                <div class="text-sm text-gray-700">
-                                                    {{ $career->name ?? '—' }}
-                                                </div>
-                                                <div class="text-xs text-gray-400 mt-0.5">
-                                                    Sección: {{ $assignment->section ?? '—' }}
-                                                    @if($assignment->shift)
-                                                        · {{ $assignment->shift->name }}
-                                                    @endif
-                                                </div>
-                                            </td>
-
-                                            {{-- Fecha de envío --}}
-                                            <td class="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
-                                                @if($syllabus->submitted_at)
-                                                    {{ $syllabus->submitted_at->format('d/m/Y') }}
-                                                    <div class="text-xs text-gray-400">
-                                                        {{ $syllabus->submitted_at->diffForHumans() }}
-                                                    </div>
-                                                @else
-                                                    <span class="text-gray-400">—</span>
-                                                @endif
-                                            </td>
-
-                                            {{-- Vista previa PDF --}}
-                                            <td class="px-6 py-4">
-                                                <a href="{{ route('teacher.syllabus.pdf', $syllabus->id) }}"
-                                                   target="_blank"
-                                                   class="inline-flex items-center gap-1 text-indigo-600
-                                                          hover:text-indigo-900 text-sm font-medium
-                                                          hover:underline transition-colors">
-                                                    <svg class="w-4 h-4 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fill-rule="evenodd"
-                                                              d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
-                                                              clip-rule="evenodd"/>
-                                                    </svg>
-                                                    Ver PDF
-                                                </a>
-                                            </td>
-
-                                            {{-- Acciones --}}
-                                            <td class="px-6 py-4 text-right whitespace-nowrap space-x-2">
-                                                {{-- Aprobar --}}
-                                                <button
-                                                    wire:click="approve({{ $syllabus->id }})"
-                                                    wire:loading.attr="disabled"
-                                                    wire:target="approve({{ $syllabus->id }})"
-                                                    class="inline-flex items-center px-3 py-1.5 bg-green-600
-                                                           hover:bg-green-700 text-white text-xs font-semibold
-                                                           rounded-md transition-colors disabled:opacity-50">
-                                                    <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                                    </svg>
-                                                    Aprobar
-                                                </button>
-
-                                                {{-- Observar --}}
-                                                <button
-                                                    wire:click="openObserveModal({{ $syllabus->id }})"
-                                                    class="inline-flex items-center px-3 py-1.5 bg-yellow-500
-                                                           hover:bg-yellow-600 text-white text-xs font-semibold
-                                                           rounded-md transition-colors">
-                                                    <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                              d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
-                                                    </svg>
-                                                    Observar
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    @empty
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full divide-y divide-gray-200">
+                                    <thead class="bg-gray-50">
                                         <tr>
-                                            <td colspan="6" class="px-6 py-12 text-center">
-                                                <svg class="mx-auto h-10 w-10 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                                </svg>
-                                                <p class="mt-2 text-sm text-gray-500">
-                                                    No hay sílabos pendientes de aprobación.
-                                                </p>
-                                            </td>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Curso</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Docente</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Carrera / Turno</th>
+                                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                                                @if($activeTab === 'pending')
+                                                    Enviado / Observado
+                                                @elseif($activeTab === 'approved')
+                                                    Aprobado
+                                                @else
+                                                    Última Edición
+                                                @endif
+                                            </th>
+                                            <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acciones</th>
                                         </tr>
-                                    @endforelse
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody class="bg-white divide-y divide-gray-200">
+                                        @forelse($syllabi as $syllabus)
+                                            @php
+                                                $assignment = $syllabus->teacherAssignment;
+                                                $teacher = $assignment->teacher->user;
+                                                $unit = $assignment->didacticUnit;
+                                                $career = $unit->module->studyPlan->career;
+                                            @endphp
+                                            <tr class="hover:bg-gray-50 transition-colors">
+                                                <td class="px-6 py-4">
+                                                    <div class="text-sm font-bold text-gray-900">{{ $unit->name }}</div>
+                                                    <div class="text-xs text-gray-500">ID: {{ $syllabus->id }}</div>
+                                                </td>
+                                                <td class="px-6 py-4 text-sm text-gray-700">
+                                                    {{ $teacher->lastname }}, {{ $teacher->name }}
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    <div class="text-sm text-gray-900">{{ $career->name }}</div>
+                                                    <div class="text-xs text-gray-500">{{ $assignment->shift->name }}</div>
+                                                </td>
+                                                <td class="px-6 py-4 text-sm text-gray-500">
+                                                    @if($activeTab === 'pending')
+                                                        {{ $syllabus->submitted_at?->format('d/m/Y H:i') ?? $syllabus->updated_at?->format('d/m/Y H:i') }}
+                                                    @elseif($activeTab === 'approved')
+                                                        {{ $syllabus->approved_at?->format('d/m/Y H:i') }}
+                                                    @else
+                                                        {{ $syllabus->updated_at?->format('d/m/Y H:i') }}
+                                                    @endif
+                                                </td>
 
-                        <div class="mt-4">{{ $syllabi->links() }}</div>
+                                                <td class="px-6 py-4 text-right text-sm font-medium space-x-3">
+                                                    <a href="{{ route('teacher.syllabus.pdf', $syllabus) }}" target="_blank" 
+                                                    class="text-blue-600 hover:text-blue-900" title="Ver PDF">
+                                                        <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                                    </a>
+
+                                                    @if($activeTab === 'pending')
+                                                        <button wire:click="approve({{ $syllabus->id }})" wire:confirm="¿Aprobar este sílabo?" class="text-green-600 hover:text-green-900">Aprobar</button>
+                                                        <button wire:click="openObserveModal({{ $syllabus->id }})" class="text-yellow-600 hover:text-yellow-900">Observar</button>
+                                                    @elseif($activeTab === 'approved')
+                                                        <x-dropdown align="right" width="48">
+                                                            <x-slot name="trigger">
+                                                                <button class="text-gray-500 hover:text-gray-700 font-bold text-xs uppercase tracking-widest">
+                                                                    Cambiar Estado ▾
+                                                                </button>
+                                                            </x-slot>
+                                                            <x-slot name="content">
+                                                                <div class="block px-4 py-2 text-xs text-gray-400">Opciones de Reversión</div>
+                                                                <x-dropdown-link class="cursor-pointer" wire:click="changeStatus({{ $syllabus->id }}, 'draft')" wire:confirm="¿Revertir a borrador?">
+                                                                    Revertir a Borrador
+                                                                </x-dropdown-link>
+                                                                <x-dropdown-link class="cursor-pointer" wire:click="openObserveModal({{ $syllabus->id }})">
+                                                                    Revertir a Observado
+                                                                </x-dropdown-link>
+                                                            </x-slot>
+                                                        </x-dropdown>
+                                                    @else
+                                                        <span class="text-xs text-gray-400 italic">En edición por docente</span>
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                        @empty
+                                            <tr>
+                                                <td colspan="5" class="px-6 py-10 text-center text-gray-500 italic">
+                                                    No se encontraron sílabos {{ $activeTab === 'pending' ? 'pendientes' : 'aprobados' }}.
+                                                </td>
+                                            </tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            @if($syllabi->hasPages())
+                                <div class="p-6 bg-gray-50 border-t border-gray-200">
+                                    {{ $syllabi->links() }}
+                                </div>
+                            @endif
+                        </div>
 
                     @endif
                 </div>
