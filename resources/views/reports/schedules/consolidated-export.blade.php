@@ -40,14 +40,18 @@
             </tr>
         </thead>
         <tbody>
-            @for($h = 7; $h <= 21; $h++)
+            @foreach($timeSlots as $slot)
                 <tr>
-                    <td class="time-col">{{ sprintf('%02d:00', $h) }}</td>
+                    <td class="time-col">{{ $slot['start'] }} - {{ $slot['end'] }}</td>
                     @foreach(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as $day)
                         <td>
                             @php
-                                // Buscamos horarios que empiecen en esta hora
-                                $cellSchedules = $schedules->get($day, collect())->filter(fn($s) => (int)$s->start_time->format('H') == $h);
+                                $cellSchedules = $schedules->get($day, collect())->filter(function($schedule) use ($slot) {
+                                    // Verificar solapamiento: inicio del curso < fin del slot Y fin del curso > inicio del slot
+                                    $courseStart = $schedule->start_time->format('H:i');
+                                    $courseEnd   = $schedule->end_time->format('H:i');
+                                    return $courseStart < $slot['end'] && $courseEnd > $slot['start'];
+                                });
                             @endphp
                             @foreach($cellSchedules as $s)
                                 <div class="course-box">
@@ -59,7 +63,7 @@
                         </td>
                     @endforeach
                 </tr>
-            @endfor
+            @endforeach
         </tbody>
     </table>
 </body>

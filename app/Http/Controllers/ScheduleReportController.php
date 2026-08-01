@@ -14,6 +14,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\TeacherScheduleExport;
 use App\Exports\CareerScheduleExport;
 use App\Exports\SemesterScheduleExport;
+use Carbon\Carbon;
 
 class ScheduleReportController extends Controller
 {
@@ -276,7 +277,6 @@ class ScheduleReportController extends Controller
         $shiftId = $request->query('shift');
         $periodId = $request->query('period_id');
 
-        // Recuperamos la data (misma lógica que en Livewire)
         $schedules = Schedule::with(['teacherAssignment.teacher.user', 'teacherAssignment.didacticUnit', 'classroomResource'])
             ->whereHas('teacherAssignment', function ($q) use ($periodId, $shiftId, $cycle, $careerId) {
                 $q->where('academic_period_id', $periodId)
@@ -287,17 +287,53 @@ class ScheduleReportController extends Controller
                     });
             })->get()->groupBy('day_of_week');
 
+        $shift = Shift::find($shiftId);
+        $career = Career::find($careerId);
+        $period = AcademicPeriod::find($periodId);
+
+        // Calcular los bloques horarios según el turno
+        $timeSlots = $this->buildTimeSlots($shift);
+
         $data = [
             'schedules' => $schedules,
-            'career' => Career::find($careerId),
-            'shift' => Shift::find($shiftId),
-            'cycle' => $cycle,
-            'period' => AcademicPeriod::find($periodId)
+            'career'    => $career,
+            'shift'     => $shift,
+            'cycle'     => $cycle,
+            'period'    => $period,
+            'timeSlots' => $timeSlots,
         ];
 
         $pdf = Pdf::loadView('reports.schedules.consolidated-export', $data)
             ->setPaper('a4', 'landscape');
 
         return $pdf->download("Horario_Consolidado_Ciclo_{$cycle}.pdf");
+    }
+
+    /**
+     * Construye la lista de slots horarios en función del turno.
+     */
+    private function buildTimeSlots(Shift $shift): array
+    {
+        $start = \Carbon\Carbon::parse($shift->start_time);
+        $end   = \Carbon\Carbon::parse($shift->end_time);
+
+        // Duración del bloque según el turno (mañana: 45 min, noche: 40 min)
+        $slotMinutes = ($start->hour < 14) ? 45 : 40;
+
+        $slots = [];
+        $current = $start->copy();
+        while ($current->lt($end)) {
+            $slotEnd = $current->copy()->addMinutes($slotMinutes);
+            if ($slotEnd->gt($end)) {
+                $slotEnd = $end->copy(); // Ajustar el último bloque
+            }
+            $slots[] = [
+                'start' => $current->format('H:i'),
+                'end'   => $slotEnd->format('H:i'),
+                'label' => $current->format('H:i'), // etiqueta visible
+            ];
+            $current = $slotEnd;
+        }
+        return $slots;
     }
 }

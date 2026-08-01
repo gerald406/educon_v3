@@ -315,15 +315,22 @@
                             <div>
                                 {{-- Botón de Exportar Excel (Apunta a una ruta que crearemos luego en el Paso 3/4) --}}
                                 @if($selectedCareerId && $filterCycleId && $filterShiftId)
-                                    <div class="flex gap-2">
+                                    <div class="flex flex-wrap gap-2 items-center">
                                         {{-- Botón Excel --}}
                                         <a href="{{ route('academic-process.schedules.export-consolidated', [
                                             'career' => $selectedCareerId, 
                                             'cycle' => $filterCycleId, 
                                             'shift' => $filterShiftId,
                                             'period_id' => $activePeriod->id
-                                        ]) }}" class="bg-green-600 text-white px-3 py-2 rounded text-xs font-bold uppercase tracking-widest">
-                                            Descargar Excel
+                                        ]) }}" 
+                                        title="Descargar Excel"
+                                        aria-label="Descargar Excel"
+                                        class="bg-green-600 text-white p-2 rounded hover:bg-green-700 transition">
+                                            {{-- Heroicon: document-arrow-down (similar a Excel) --}}
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                                    d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                            </svg>
                                         </a>
 
                                         {{-- Botón PDF --}}
@@ -332,9 +339,29 @@
                                             'cycle' => $filterCycleId, 
                                             'shift' => $filterShiftId,
                                             'period_id' => $activePeriod->id
-                                        ]) }}" class="bg-red-600 text-white px-3 py-2 rounded text-xs font-bold uppercase tracking-widest">
-                                            Descargar PDF
+                                        ]) }}" 
+                                        title="Descargar PDF"
+                                        aria-label="Descargar PDF"
+                                        class="bg-red-600 text-white p-2 rounded hover:bg-red-700 transition">
+                                            {{-- Heroicon: document-text (representa PDF) --}}
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                            </svg>
                                         </a>
+
+                                        {{-- Botón de reseteo --}}
+                                        <button wire:click="resetSemesterSchedules"
+                                                wire:confirm="¿Está seguro de eliminar TODOS los horarios del semestre {{ $filterCycleId }}? Esta acción no se puede deshacer."
+                                                title="Reiniciar horarios del semestre"
+                                                aria-label="Reiniciar horarios del semestre {{ $filterCycleId }}"
+                                                class="bg-red-700 text-white p-2 rounded hover:bg-red-800 transition border-2 border-red-300">
+                                            {{-- Heroicon: trash --}}
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                            </svg>
+                                        </button>
                                     </div>
                                 @endif
                             </div>

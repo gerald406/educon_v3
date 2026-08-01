@@ -196,12 +196,13 @@ class ScheduleManager extends Component
     public function addSchedule()
     {
         $this->validate([
-            'day_of_week' => 'required',
-            'start_time' => 'required|date_format:H:i',
-            'end_time' => 'required|date_format:H:i|after:start_time',
-            'classroom_resource_id' => 'nullable|exists:classroom_resources,id'
+            'day_of_week'             => 'required',
+            'start_time'              => 'required|date_format:H:i',
+            'end_time'                => 'required|date_format:H:i|after:start_time',
+            'classroom_resource_id'   => 'nullable|exists:classroom_resources,id',
         ]);
 
+        // 1. Verificar conflicto intra-asignatura (lógica existente)
         $conflict = $this->currentSchedules->where('day_of_week', $this->day_of_week)
             ->filter(function ($s) {
                 return ($this->start_time < $s->end_time->format('H:i')) &&
@@ -210,26 +211,72 @@ class ScheduleManager extends Component
 
         if ($conflict) {
             $this->dispatch('swal', [
-                'icon' => 'error',
+                'icon'  => 'error',
                 'title' => 'Conflicto',
-                'text' => 'Ya existe un horario en ese rango.'
+                'text'  => 'Ya existe un bloque horario para esta sección en ese día y rango.'
             ]);
             return;
         }
 
+        // 2. Verificar cruces de DOCENTE en otras asignaciones dentro del mismo periodo
+        // 2. Verificar cruces de DOCENTE en otras asignaciones (excluyendo la actual)
+        $teacherId = $this->selectedAssignment->teacher_id;
+        $teacherConflict = Schedule::where('teacher_assignment_id', '!=', $this->selectedAssignmentId) // ← Exclusión clave
+            ->whereHas('teacherAssignment', function ($q) use ($teacherId) {
+                $q->where('teacher_id', $teacherId)
+                    ->where('academic_period_id', $this->activePeriod->id)
+                    ->where('status', 'active');
+            })
+            ->where('day_of_week', $this->day_of_week)
+            ->where(function ($q) {
+                $q->where('start_time', '<', $this->end_time)
+                    ->where('end_time', '>', $this->start_time);
+            })
+            ->exists();
+
+        if ($teacherConflict) {
+            $this->dispatch('swal', [
+                'icon'  => 'error',
+                'title' => 'Conflicto de docente',
+                'text'  => 'El profesor ya tiene otra clase programada en ese día y rango horario.'
+            ]);
+            return;
+        }
+
+        // 3. Verificar cruces de AULA (solo si se seleccionó una)
+        if ($this->classroom_resource_id) {
+            $classroomConflict = Schedule::where('classroom_resource_id', $this->classroom_resource_id)
+                ->where('day_of_week', $this->day_of_week)
+                ->where(function ($q) {
+                    $q->where('start_time', '<', $this->end_time)
+                        ->where('end_time', '>', $this->start_time);
+                })
+                ->exists();
+
+            if ($classroomConflict) {
+                $this->dispatch('swal', [
+                    'icon'  => 'error',
+                    'title' => 'Conflicto de aula',
+                    'text'  => 'El aula ya está ocupada en ese día y rango horario por otra sección.'
+                ]);
+                return;
+            }
+        }
+
+        // 4. Crear el horario
         Schedule::create([
             'teacher_assignment_id' => $this->selectedAssignmentId,
-            'day_of_week' => $this->day_of_week,
-            'start_time' => $this->start_time,
-            'end_time' => $this->end_time,
-            'classroom_resource_id' => $this->classroom_resource_id ?: null
+            'day_of_week'           => $this->day_of_week,
+            'start_time'            => $this->start_time,
+            'end_time'              => $this->end_time,
+            'classroom_resource_id' => $this->classroom_resource_id ?: null,
         ]);
 
         $this->loadSchedules();
         $this->dispatch('swal', [
-            'icon' => 'success',
+            'icon'  => 'success',
             'title' => 'Agregado',
-            'text' => 'Bloque horario registrado.'
+            'text'  => 'Bloque horario registrado correctamente.'
         ]);
     }
 
@@ -442,6 +489,52 @@ class ScheduleManager extends Component
         // Redireccionar a descarga
         // return redirect()->route('academic-process.schedules.export', $params);
         $this->js("window.open('$url', '_blank');");
+    }
+
+
+    /**
+     * Elimina TODOS los horarios del semestre seleccionado en la vista consolidada.
+     * Actúa como un reseteo masivo de la programación horaria para ese ciclo/turno/programa.
+     */
+    public function resetSemesterSchedules()
+    {
+        // Validar que los filtros necesarios estén seleccionados
+        if (!$this->selectedCareerId || !$this->filterCycleId || !$this->filterShiftId || !$this->activePeriod) {
+            $this->dispatch('swal', [
+                'icon'  => 'error',
+                'title' => 'Filtros incompletos',
+                'text'  => 'Seleccione Programa, Semestre y Turno antes de reiniciar.'
+            ]);
+            return;
+        }
+
+        // Obtener los IDs de las asignaciones que coinciden con los filtros
+        $assignmentIds = TeacherAssignment::where('academic_period_id', $this->activePeriod->id)
+            ->where('shift_id', $this->filterShiftId)
+            ->whereHas('didacticUnit', function ($q) {
+                $q->where('semester', $this->filterCycleId)
+                    ->whereHas('module.studyPlan', fn($q2) => $q2->where('career_id', $this->selectedCareerId));
+            })
+            ->pluck('id');
+
+        if ($assignmentIds->isEmpty()) {
+            $this->dispatch('swal', [
+                'icon'  => 'info',
+                'title' => 'Sin horarios',
+                'text'  => 'No se encontraron asignaciones para los filtros seleccionados.'
+            ]);
+            return;
+        }
+
+        // Eliminar todos los horarios asociados a esas asignaciones
+        $deleted = Schedule::whereIn('teacher_assignment_id', $assignmentIds)->delete();
+
+        // Refrescar la vista consolidada (se recalcula automáticamente porque consolidatedSchedule es computada)
+        $this->dispatch('swal', [
+            'icon'  => 'success',
+            'title' => 'Horarios eliminados',
+            'text'  => "Se eliminaron {$deleted} bloques horarios del semestre {$this->filterCycleId}."
+        ]);
     }
 
     public function render()

@@ -36,16 +36,38 @@ class SemesterScheduleExport implements FromView, ShouldAutoSize, WithStyles
                     });
             })->get()->groupBy('day_of_week');
 
+        $shift = Shift::find($this->shiftId);
+        $career = Career::find($this->careerId);
+        $period = AcademicPeriod::find($this->periodId);
+
+        // Construir timeSlots (idéntico al controlador)
+        $start = \Carbon\Carbon::parse($shift->start_time);
+        $end   = \Carbon\Carbon::parse($shift->end_time);
+        $slotMinutes = ($start->hour < 14) ? 45 : 40;
+        $timeSlots = [];
+        $current = $start->copy();
+        while ($current->lt($end)) {
+            $slotEnd = $current->copy()->addMinutes($slotMinutes);
+            if ($slotEnd->gt($end)) {
+                $slotEnd = $end->copy();
+            }
+            $timeSlots[] = [
+                'start' => $current->format('H:i'),
+                'end'   => $slotEnd->format('H:i'),
+                'label' => $current->format('H:i'),
+            ];
+            $current = $slotEnd;
+        }
+
         return view('reports.schedules.consolidated-export', [
             'schedules' => $schedules,
-            'career'    => Career::find($this->careerId),
-            'shift'     => Shift::find($this->shiftId),
-            'period'    => AcademicPeriod::find($this->periodId),
+            'career'    => $career,
+            'shift'     => $shift,
+            'period'    => $period,
             'cycle'     => $this->cycle,
-            'isExcel'   => true
+            'timeSlots' => $timeSlots,
+            'isExcel'   => true,
         ]);
-
-        
     }
 
     public function styles(Worksheet $sheet)
