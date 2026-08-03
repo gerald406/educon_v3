@@ -80,7 +80,7 @@ class DistributionManager extends Component
         }
     }
 
-    private function getApplicantsQuery()
+   /** private function getApplicantsQuery()
     {
 
         $query = Applicant::with(['user', 'admissionOffering.career', 'admissionModality'])
@@ -99,7 +99,32 @@ class DistributionManager extends Component
         }
 
         return $query;
+    } **/
+	// DESPUÉS
+private function getApplicantsQuery()
+{
+    $query = Applicant::with(['user', 'admissionOffering.career', 'admissionModality'])
+        ->has('user')
+        ->where('application_status', 'registrado')
+        ->whereDoesntHave('examAssignment')
+        ->join('users', 'applicants.user_id', '=', 'users.id')
+        ->orderBy('users.lastname', 'asc')
+        ->orderBy('users.name', 'asc')
+        ->select('applicants.*');
+
+    if ($this->filterModality) $query->where('admission_modality_id', $this->filterModality);
+
+    if ($this->filterCareer) {
+        $query->whereHas('admissionOffering', fn($q) => $q->where('career_id', $this->filterCareer));
     }
+
+    if ($this->filterShift) {
+        $query->whereHas('admissionOffering', fn($q) => $q->where('shift_id', $this->filterShift));
+    }
+
+    return $query;
+}
+
 
     // --- ACCIÓN: ASIGNACIÓN MANUAL ---
     public function assignManual()

@@ -183,7 +183,6 @@
                 <tr>
                     <td class="text-bold">1.9 PERIODO ACADÉMICO</td>
                     <td>:</td>
-                    {{-- <td>{{ Str::upper($unit?->semester ?? '---') }}</td> --}}
                     <td>{{ collect([1=>'I', 2=>'II', 3=>'III', 4=>'IV', 5=>'V', 6=>'VI'])->get((int)($unit?->semester ?? 0), '---') }}</td>
                 </tr>
                 <tr>
@@ -198,8 +197,8 @@
                 </tr>
                 <tr>
                     <td class="text-bold">1.12 DOCENTE</td>
-                    <td>:</td>
-                    <td>{{ Str::upper(($user?->name ?? 'NO ASIGNADO') . ' ' . ($user?->lastname ?? '')) }}</td>     
+					<td>:</td>
+					<td>{{ Str::upper(($user?->name ?? 'NO ASIGNADO') . ' ' . ($user?->lastname ?? '')) }}</td>
                 </tr>
                 <tr>
                     <td class="text-bold">1.13 CORREO INSTITUCIONAL</td>

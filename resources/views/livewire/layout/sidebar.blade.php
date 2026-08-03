@@ -82,7 +82,6 @@
                     </a>
                     <a href="{{ route('admission.fast-grades') }}" class="block px-3 py-2 rounded-md text-sm font-medium {{ request()->routeIs('admission.fast-grades') ? 'text-white' : 'text-gray-400 hover:text-white' }}">Registro de Notas</a>
                     <a href="{{ route('admission.ranking-report') }}" class="block px-3 py-2 rounded-md text-sm font-medium {{ request()->routeIs('admission.ranking-report') ? 'text-white' : 'text-gray-400 hover:text-white' }}">Ranking de Admisión</a>
-                    
                     <div class="border-t border-gray-700 my-1"></div>
                     
                     <a href="{{ route('admission.offerings') }}" class="block px-3 py-2 rounded-md text-sm font-medium {{ request()->routeIs('admission.offerings') ? 'text-white' : 'text-gray-400 hover:text-white' }}">Config. Vacantes</a>

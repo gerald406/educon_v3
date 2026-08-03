@@ -157,7 +157,7 @@
                     </button>
                     <button wire:click="$set('activeTab', 'employability')" 
                         class="w-full text-left px-4 py-3 rounded-md font-medium transition-colors duration-150 {{ $activeTab === 'employability' ? 'bg-indigo-50 text-indigo-700 border-l-4 border-indigo-600' : 'text-gray-600 hover:bg-gray-50' }}">
-                        V. Comp. para la Empleabilidad
+                        V. Comp. Transversal
                     </button>
                     <button wire:click="$set('activeTab', 'programming')" 
                         class="w-full text-left px-4 py-3 rounded-md font-medium transition-colors duration-150 {{ $activeTab === 'programming' ? 'bg-indigo-50 text-indigo-700 border-l-4 border-indigo-600' : 'text-gray-600 hover:bg-gray-50' }}">
@@ -679,11 +679,9 @@
                                     <h3 class="text-sm font-bold text-blue-800">Ejemplo de redacción:</h3>
                                     <div class="text-sm text-blue-700 mt-1 italic">
                                         <ul class="list-disc list-inside">
-                                            <li>Trabajo en equipo: Participa activamente en el logro de objetivos
-                                                comunes...</li>
-                                            <li>Comunicación efectiva: Expresa ideas de manera clara y asertiva...</li>
-                                            <li>Ética: Actúa con responsabilidad y valores en su desempeño
-                                                profesional...</li>
+                                            <li>Liderazgo personal y profesional (T): Articular recursos y potencialidades de cada...</li>
+                                            <li>Trabajo Colaborativo (T): Participar de forma activa en el logro...</li>
+                                            <li>Interculturalidad (T): Establecer relaciones de reconocimiento e intercambio...</li>
                                         </ul>
                                     </div>
                                 </div>

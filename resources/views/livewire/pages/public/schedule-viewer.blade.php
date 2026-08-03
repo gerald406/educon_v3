@@ -29,10 +29,10 @@
                 
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Ciclo</label>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Semestre</label>
                         <select wire:model.live="filterCycleId" class="w-full bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block p-3" {{ !$selectedCareerId ? 'disabled' : '' }}>
                             <option value="">--</option>
-                            @for($i = 1; $i <= 6; $i++) <option value="{{ $i }}">Ciclo {{ $i }}</option> @endfor
+                            @for($i = 1; $i <= 6; $i++) <option value="{{ $i }}">Semestre {{ $i }}</option> @endfor
                         </select>
                     </div>
                     <div>
