@@ -12,6 +12,8 @@ class DidacticUnit extends Model
     use HasFactory, SoftDeletes;
 
     protected $appends = ['name_with_semester'];
+    // $units = DidacticUnit::all()->append('name_with_semester');
+
 
     protected $fillable = [
         'module_id',

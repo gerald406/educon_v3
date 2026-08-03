@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class Student extends Model
 {
     use HasFactory, SoftDeletes;
+    protected $with = ['user', 'career', 'studyPlan'];
 
     protected $fillable = [
         'user_id',
@@ -46,9 +47,10 @@ class Student extends Model
         return $this->belongsTo(User::class);
     }
 
-    /**
-     * Un estudiante (opcionalmente) viene de un registro de postulante.
-     */
+    public function scopeActive($query)
+    {
+        return $query->where('academic_status', 'regular');
+    }
 
 
     /**

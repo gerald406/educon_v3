@@ -39,8 +39,8 @@ class Module extends Model
     }
 
     // Ya debe existir en DidacticUnit.php — verificar
-    public function module()
+    /* public function module()
     {
         return $this->belongsTo(Module::class);
-    }
+    } */
 }

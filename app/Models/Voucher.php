@@ -79,4 +79,10 @@ class Voucher extends Model
     {
         return $this->hasOne(CreditNote::class);
     }
+
+    // sopoce
+    public function scopeIssued($query)
+    {
+        return $query->where('status', 'issued');
+    }
 }

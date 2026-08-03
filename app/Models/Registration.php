@@ -41,17 +41,39 @@ class Registration extends Model
     /**
      * Una matrícula pertenece a un estudiante
      */
-    public function student()
+    /* public function student()
     {
         return $this->belongsTo(Student::class);
+    } */
+    public function student()
+    {
+        return $this->hasOneThrough(
+            Student::class,
+            Enrollment::class,
+            'id',          // FK en Enrollment (local key)
+            'id',          // FK en Student (local key)
+            'enrollment_id', // FK en Registration (foreign key)
+            'student_id'   // FK en Enrollment (foreign key)
+        );
     }
 
 
     /**
      * Una matrícula pertenece a un periodo académico
      */
-    public function academicPeriod()
+    /* public function academicPeriod()
     {
         return $this->belongsTo(AcademicPeriod::class);
+    } */
+    public function academicPeriod()
+    {
+        return $this->hasOneThrough(
+            AcademicPeriod::class,
+            Enrollment::class,
+            'id',
+            'id',
+            'enrollment_id',
+            'academic_period_id'
+        );
     }
 }

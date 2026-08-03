@@ -11,6 +11,8 @@ class Applicant extends Model
 {
     use HasFactory, SoftDeletes;
 
+    protected $with = ['user', 'admissionOffering.career'];
+
     protected $fillable = [
         'user_id',
         'phone',

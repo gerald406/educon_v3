@@ -42,6 +42,11 @@ class TeacherAssignment extends Model
         return $this->belongsTo(Teacher::class);
     }
 
+    public function scopeActive($query)
+    {
+        return $query->where('status', 'active');
+    }
+
     /**
      * La asignación pertenece a una unidad didáctica (curso).
      */
