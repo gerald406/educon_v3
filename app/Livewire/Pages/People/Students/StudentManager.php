@@ -6,7 +6,7 @@ use App\Models\Career;
 use App\Models\Student;
 use App\Models\StudyPlan;
 use App\Models\User;
-use App\Services\PersonDataService; // Importar servicio
+use App\Services\PersonDataService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -16,20 +16,21 @@ use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Livewire\WithFileUploads;
+use Carbon\Carbon;
 
 #[Layout('layouts.app')]
 class StudentManager extends Component
 {
     use WithPagination;
     use AuthorizesRequests;
+    use WithFileUploads;
 
     // --- User Data ---
     public $searchDni = '';
     public $document_number = '';
     public $name = '';
-    // public $paternal_surname = '';
-    // public $maternal_surname = '';
-    public $lastname = ''; // <-- Nueva variable unificada
+    public $lastname = '';
     public $email = '';
 
     // Extras de User/Applicant
@@ -55,6 +56,10 @@ class StudentManager extends Component
     // --- Dropdowns ---
     public Collection $careers;
     public Collection $studyPlans;
+
+    // --- Importación Masiva ---
+    public $file;
+    public $isImportModalOpen = false;
 
     protected function personService()
     {
@@ -129,24 +134,32 @@ class StudentManager extends Component
         $this->editingUser = $user;
         $this->document_number = $user->document_number;
         $this->name = $user->name;
-        $this->lastname        = $user->lastname;
+        $this->lastname = $user->lastname;
         $this->email = $user->email;
 
-        // Si ya es estudiante, cargar datos extra si existen en Applicant o Student
-        // Priorizamos tabla students si tienes esos campos, si no applicant
-        // Asumo que migraste phone/address a students en tu ultimo lote
         if ($this->editingStudent) {
             $this->phone = $this->editingStudent->phone;
             $this->address = $this->editingStudent->address;
-            $this->gender = $this->editingStudent->gender;
-            $this->birthday = $this->editingStudent->birthday ? $this->editingStudent->birthday->format('Y-m-d') : '';
+            $this->gender = $this->editingStudent->gender ? strtolower($this->editingStudent->gender) : 'masculino';
+
+            if ($this->editingStudent->birthday) {
+                $this->birthday = Carbon::parse($this->editingStudent->birthday)->format('Y-m-d');
+            } else {
+                $this->birthday = '';
+            }
         }
     }
 
     public function updatedCareerId($value)
     {
         $this->studyPlans = StudyPlan::where('career_id', $value)->where('status', 'active')->get();
-        $this->study_plan_id = '';
+
+        // [CORRECCIÓN DEL BUG]
+        // Solo borramos el plan de estudios si el plan actual NO pertenece a la nueva carrera seleccionada.
+        // Esto evita que Livewire deseleccione el combo accidentalmente al abrir el modal.
+        if (!$this->studyPlans->contains('id', (int) $this->study_plan_id)) {
+            $this->study_plan_id = '';
+        }
     }
 
     public function create()
@@ -165,12 +178,16 @@ class StudentManager extends Component
         $this->searchDni = $this->document_number;
 
         $this->career_id = $student->career_id;
-        $this->updatedCareerId($this->career_id);
+
+        // [CORRECCIÓN] Cargamos todos los planes (incluyendo inactivos) de la carrera.
+        // Garantiza que si el estudiante tiene un plan antiguo, aún se muestre en el select.
+        $this->studyPlans = StudyPlan::where('career_id', $this->career_id)->get();
+
         $this->study_plan_id = $student->study_plan_id;
 
         $this->code = $student->code;
         $this->current_semester = $student->current_semester;
-        $this->admission_date = $student->admission_date ? $student->admission_date->format('Y-m-d') : '';
+        $this->admission_date = $student->admission_date ? Carbon::parse($student->admission_date)->format('Y-m-d') : '';
         $this->academic_status = $student->academic_status;
 
         $this->resetValidation();
@@ -184,12 +201,9 @@ class StudentManager extends Component
 
         DB::beginTransaction();
         try {
-            // 1. Usuario
-            // $fullLastname = trim($this->paternal_surname . ' ' . $this->maternal_surname);
-
             $userData = [
                 'name' => $this->name,
-                'lastname'        => $this->lastname,
+                'lastname' => $this->lastname,
                 'document_number' => $this->document_number,
                 'email' => $this->email,
             ];
@@ -204,7 +218,6 @@ class StudentManager extends Component
                 $user->assignRole('Estudiante');
             }
 
-            // 2. Estudiante
             Student::updateOrCreate(
                 ['id' => $this->editingStudent?->id],
                 [
@@ -244,8 +257,6 @@ class StudentManager extends Component
         try {
             $student = Student::findOrFail($id);
 
-            // 1. Validación de seguridad: No borrar si tiene historial académico (Matrículas)
-            // Asumiendo que tienes el modelo Enrollment importado
             $hasEnrollments = \App\Models\Enrollment::where('student_id', $student->id)->exists();
 
             if ($hasEnrollments) {
@@ -258,13 +269,8 @@ class StudentManager extends Component
             }
 
             DB::transaction(function () use ($student) {
-                // 2. Guardamos el usuario asociado antes de borrar al estudiante
                 $user = $student->user;
-
-                // 3. Borramos PRIMERO al estudiante (El hijo)
                 $student->delete();
-
-                // 4. Borramos DESPUÉS al usuario (El padre) si existe
                 if ($user) {
                     $user->delete();
                 }
@@ -293,10 +299,54 @@ class StudentManager extends Component
         $this->phone = '';
         $this->address = '';
         $this->gender = 'masculino';
+        $this->birthday = '';
         $this->code = '';
+        $this->career_id = '';
+        $this->study_plan_id = '';
         $this->current_semester = 1;
+        $this->academic_status = 'regular';
         $this->admission_date = now()->format('Y-m-d');
         $this->studyPlans = collect();
+    }
+
+    public function openImportModal()
+    {
+        $this->authorize('gestionar-estudiantes');
+        $this->resetValidation();
+        $this->reset('file');
+        $this->isImportModalOpen = true;
+    }
+
+    public function closeImportModal()
+    {
+        $this->isImportModalOpen = false;
+        $this->reset('file');
+    }
+
+    public function import()
+    {
+        $this->authorize('gestionar-estudiantes');
+
+        $this->validate([
+            'file' => 'required|file|mimes:xlsx,xls|max:10240', // Max 10MB
+        ]);
+
+        DB::beginTransaction();
+        try {
+            \Maatwebsite\Excel\Facades\Excel::import(new \App\Imports\StudentsMasterImport, $this->file);
+
+            DB::commit();
+            $this->closeImportModal();
+            $this->dispatch('swal', ['icon' => 'success', 'title' => 'Importación Exitosa', 'text' => 'Los estudiantes fueron registrados y matriculados correctamente.']);
+        } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
+            DB::rollBack();
+            $failures = $e->failures();
+            $errorMessage = "Error en la fila {$failures[0]->row()}: " . implode(', ', $failures[0]->errors());
+            $this->dispatch('swal', ['icon' => 'error', 'title' => 'Error de Validación', 'text' => $errorMessage]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            $this->dispatch('swal', ['icon' => 'error', 'title' => 'Error de Importación', 'text' => $e->getMessage()]);
+        }
     }
 
     public function render()

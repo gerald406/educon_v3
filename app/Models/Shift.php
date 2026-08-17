@@ -22,7 +22,7 @@ class Shift extends Model
      * Define los casts para las horas.
      */
     protected $casts = [
-        'start_time' => 'time',
-        'end_time' => 'time',
+        'start_time' => 'string',
+        'end_time' => 'string',
     ];
 }

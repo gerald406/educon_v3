@@ -23,6 +23,11 @@ class TeacherManager extends Component
     use WithPagination;
     use AuthorizesRequests;
 
+    // --- Cambio de Contraseña (Admin) ---
+    public ?int $resettingPasswordUserId = null;
+    public string $new_password = '';
+    public bool $isPasswordModalOpen = false;
+
     // --- Datos de Usuario (Cuenta) ---
     public $searchDni        = '';
     public $document_number  = '';
@@ -427,6 +432,59 @@ class TeacherManager extends Component
         $this->is_coordinator   = false;
         $this->selectedCareerId = null;
         $this->resetErrorBag();
+    }
+
+
+    // ============================================
+    // CAMBIO DE CONTRASEÑA (SOLO ADMIN)
+    // ============================================
+
+    public function openPasswordModal($userId)
+    {
+        // Seguridad en backend: solo Administrador puede ejecutar esto
+        if (!auth()->user()->hasRole('Administrador')) {
+            abort(403, 'No autorizado para cambiar contraseñas.');
+        }
+
+        $this->resettingPasswordUserId = $userId;
+        $this->new_password = '';
+        $this->resetValidation('new_password');
+        $this->isPasswordModalOpen = true;
+    }
+
+    public function updatePassword()
+    {
+        // Seguridad en backend: doble verificación
+        if (!auth()->user()->hasRole('Administrador')) {
+            abort(403, 'No autorizado para cambiar contraseñas.');
+        }
+
+        $this->validate([
+            'new_password' => 'required|string|min:8',
+        ], [
+            'new_password.required' => 'La nueva contraseña es obligatoria.',
+            'new_password.min'      => 'La contraseña debe tener al menos 8 caracteres.',
+        ]);
+
+        $user = User::findOrFail($this->resettingPasswordUserId);
+        $user->password = Hash::make($this->new_password);
+        $user->save();
+
+        $this->closePasswordModal();
+
+        $this->dispatch('swal', [
+            'icon'  => 'success',
+            'title' => 'Contraseña Actualizada',
+            'text'  => 'La contraseña del docente ha sido cambiada correctamente.'
+        ]);
+    }
+
+    public function closePasswordModal()
+    {
+        $this->isPasswordModalOpen = false;
+        $this->resettingPasswordUserId = null;
+        $this->new_password = '';
+        $this->resetValidation('new_password');
     }
 
     public function render()

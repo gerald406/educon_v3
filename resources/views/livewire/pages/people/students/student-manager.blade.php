@@ -6,11 +6,21 @@
     <div class="py-12">
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white shadow-xl sm:rounded-lg p-6">
-                <div class="flex justify-between mb-6">
-                    <div class="w-1/3">
+                <!-- CABECERA: Buscador y Botones -->
+                <div class="flex flex-col md:flex-row justify-between mb-6 gap-4">
+                    <div class="w-full md:w-1/3">
                         <x-input type="text" wire:model.live.debounce.300ms="search" placeholder="Buscar Estudiante..." class="w-full" />
                     </div>
-                    <x-button wire:click="create">Nuevo Estudiante</x-button>
+                    <div class="flex space-x-2">
+                        <!-- Botón de Importación -->
+                        <x-secondary-button wire:click="openImportModal" class="flex items-center">
+                            <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                            </svg>
+                            Importar
+                        </x-secondary-button>
+                        <x-button wire:click="create">Nuevo Estudiante</x-button>
+                    </div>
                 </div>
 
                 <div class="overflow-x-auto border rounded-lg">
@@ -66,6 +76,52 @@
         </div>
     </div>
 
+    <!-- MODAL DE IMPORTACIÓN MASIVA (NUEVO) -->
+    <x-dialog-modal wire:model="isImportModalOpen" maxWidth="lg">
+        <x-slot name="title">Importar Matrícula de Estudiantes (Planilla Maestra)</x-slot>
+        <x-slot name="content">
+            <div class="space-y-4">
+                <div class="bg-blue-50 border-l-4 border-blue-400 p-4">
+                    <div class="flex">
+                        <div class="ml-3">
+                            <p class="text-sm text-blue-700">
+                                El archivo debe ser un Excel (.xlsx) y la primera fila (Cabecera) debe contener exactamente los siguientes nombres de columna en minúscula:
+                            </p>
+                            <p class="text-xs font-mono bg-white p-2 mt-2 rounded border font-semibold text-gray-800 overflow-x-auto">
+                                dni | nombres | apellidos | genero | cod_carrera | cod_plan | semestre | periodo | seccion | turno
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <x-label value="Seleccionar Archivo Excel" />
+                    <input type="file" wire:model="file" accept=".xlsx, .xls" class="mt-2 block w-full text-sm text-gray-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-md file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-indigo-50 file:text-indigo-700
+                        hover:file:bg-indigo-100
+                    "/>
+                    <x-input-error for="file" class="mt-2" />
+                </div>
+
+                <!-- Indicador de Carga -->
+                <div wire:loading wire:target="file" class="text-sm text-blue-600 font-medium">
+                    Procesando documento temporal...
+                </div>
+            </div>
+        </x-slot>
+        <x-slot name="footer">
+            <x-secondary-button wire:click="closeImportModal">Cancelar</x-secondary-button>
+            <x-button class="ml-3 bg-green-600 hover:bg-green-700" wire:click="import" wire:loading.attr="disabled" wire:target="import, file">
+                <span wire:loading.remove wire:target="import">Subir y Matricular</span>
+                <span wire:loading wire:target="import">Procesando Importación...</span>
+            </x-button>
+        </x-slot>
+    </x-dialog-modal>
+
+    <!-- MODAL DE CREAR / EDITAR (EXISTENTE) -->
     <x-dialog-modal wire:model="isModalOpen" maxWidth="2xl">
         <x-slot name="title">{{ $editingStudent ? 'Editar Estudiante' : 'Nuevo Estudiante' }}</x-slot>
         <x-slot name="content">
@@ -166,30 +222,23 @@
             <x-button class="ml-3" wire:click="save" wire:loading.attr="disabled">Guardar</x-button>
         </x-slot>
     </x-dialog-modal>
-   @script
+
+    @script
     <script>
-        // Escucha el evento de confirmación
         Livewire.on('swal:confirm', (event) => {
-            
-            // 1. CORRECCIÓN CRÍTICA: Normalizar los datos
-            // Livewire 3 a veces envía los datos como objeto directo o dentro de un array [0]
             let data = event;
             if (Array.isArray(event) && event.length > 0) {
                 data = event[0];
             }
-            
-            // Si data llega envuelto en otro objeto 'detail' (común en eventos de navegador)
             if (data.detail) {
                 data = data.detail;
             }
 
-            // Validar que tengamos los datos necesarios
             if (!data.method || !data.id) {
                 console.error('Error: Faltan datos para el borrado (id o method)', data);
                 return;
             }
 
-            // 2. Mostrar Alerta
             Swal.fire({
                 title: data.title || '¿Estás seguro?',
                 text: data.text || "Esta acción no se puede deshacer",
@@ -201,14 +250,11 @@
                 cancelButtonText: 'Cancelar'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    // 3. Enviar la orden al servidor
-                    // Usamos { id: ... } para asegurar que PHP mapee el argumento $id correctamente
                     Livewire.dispatch(data.method, { id: data.id });
                 }
             });
         });
 
-        // Escuchar mensajes de éxito/error generales
         Livewire.on('swal', (event) => {
             let data = event;
             if (Array.isArray(event)) data = event[0];
@@ -218,7 +264,9 @@
                 title: data.title,
                 text: data.text,
                 showConfirmButton: false,
-                timer: 2000
+                timer: 3000,
+                toast: true,
+                position: 'top-end'
             });
         });
     </script>

@@ -65,6 +65,9 @@ class RolesAndPermissionsSeeder extends Seeder
         // Módulo Comunicación
         Permission::firstOrCreate(['name' => 'gestionar-anuncios']); // Añadido Fase 85
 
+        // Módulo Bienestar Estudiantil
+        Permission::firstOrCreate(['name' => 'gestionar-bienestar']);
+
         // [NUEVO PERMISO]
         Permission::firstOrCreate(['name' => 'gestionar-cuadro-meritos']);
 
@@ -151,6 +154,12 @@ class RolesAndPermissionsSeeder extends Seeder
             'registrar-pagos', // Pagar deudas
             'gestionar-sesiones-caja', // Abrir/Cerrar caja
             'registrar-tramites', // Registrar pagos TUPA
+        ]);
+
+        // Rol Admisión
+        $roleAdmission = Role::firstOrCreate(['name' => 'Admisión']);
+        $roleAdmission->syncPermissions([
+            'gestionar-admision',
         ]);
 
         // [NUEVO ROL] Para pagos de usuarios no registrados

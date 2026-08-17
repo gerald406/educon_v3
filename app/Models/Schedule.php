@@ -20,8 +20,8 @@ class Schedule extends Model
     ];
     
     protected $casts = [
-        'start_time' => 'time', // Formatear como 14:30
-        'end_time' => 'time',
+        'start_time' => 'string', // Formatear como 14:30
+        'end_time' => 'string',
     ];
 
     /**

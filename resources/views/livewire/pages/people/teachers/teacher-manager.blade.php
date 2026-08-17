@@ -86,6 +86,13 @@
                                         </span>
                                     </td>
                                     <td class="px-6 py-4 text-right text-sm font-medium">
+                                        @role('Administrador')
+                                        <button wire:click="openPasswordModal({{ $teacher->user_id }})" class="text-yellow-600 hover:text-yellow-900 mr-3" title="Cambiar Contraseña">
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 inline-block">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                                            </svg>
+                                        </button>
+                                        @endrole
                                         <button wire:click="edit({{ $teacher->id }})" class="text-indigo-600 hover:text-indigo-900 mr-3 font-semibold">Editar</button>
                                         <button wire:click="confirmDelete({{ $teacher->id }})" class="text-red-600 hover:text-red-900 font-semibold">Eliminar</button>
                                     </td>
@@ -266,6 +273,30 @@
             <x-button class="ml-3" wire:click="save" wire:loading.attr="disabled">Guardar</x-button>
         </x-slot>
     </x-dialog-modal>
+  
+  	{{-- MODAL DE CAMBIO DE CONTRASEÑA (SOLO ADMIN) --}}
+    <x-dialog-modal wire:model="isPasswordModalOpen" maxWidth="sm">
+        <x-slot name="title">Cambiar Contraseña de Acceso</x-slot>
+        <x-slot name="content">
+            <div class="space-y-4">
+                <p class="text-sm text-gray-600">Por seguridad, ingrese una nueva contraseña para este usuario. Mínimo 8 caracteres.</p>
+                <div>
+                    <x-label value="Nueva Contraseña" />
+                    <x-input wire:model="new_password" type="password" class="w-full mt-1" placeholder="••••••••" autocomplete="new-password" />
+                    <x-input-error for="new_password" class="mt-1" />
+                </div>
+            </div>
+        </x-slot>
+        <x-slot name="footer">
+            <x-secondary-button wire:click="closePasswordModal">Cancelar</x-secondary-button>
+            <x-button class="ml-3 bg-yellow-600 hover:bg-yellow-700 focus:bg-yellow-700 active:bg-yellow-800" wire:click="updatePassword" wire:loading.attr="disabled" wire:target="updatePassword">
+                <svg wire:loading wire:target="updatePassword" class="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline-block" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                Actualizar Contraseña
+            </x-button>
+        </x-slot>
+    </x-dialog-modal>
+  
+  
   @script
 <script>
     // Listener para confirmación de eliminación de docente

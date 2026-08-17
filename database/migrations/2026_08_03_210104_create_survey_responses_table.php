@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('survey_form_id')->constrained('survey_forms')->onDelete('cascade');
             $table->foreignId('student_id')->constrained('students')->onDelete('cascade');
+            $table->foreignId('academic_period_id')->nullable()->constrained('academic_periods')->onDelete('cascade');
             $table->datetime('responded_at')->nullable();
             $table->string('ip_address', 45)->nullable();
             $table->text('user_agent')->nullable();
@@ -21,9 +22,9 @@ return new class extends Migration
 
             // Índices para consultas rápidas
             $table->index(['survey_form_id', 'student_id']);
+            $table->index(['survey_form_id', 'academic_period_id']);
             $table->index('status');
             $table->index('responded_at');
-            $table->unique(['survey_form_id', 'student_id'], 'unique_response');
         });
     }
 

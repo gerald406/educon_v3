@@ -5,10 +5,17 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+// Importaciones del módulo de Bienestar
+use App\Models\Wellness\SurveyAssignment;
+use App\Models\Wellness\SurveyResponse;
 
 class Student extends Model
 {
     use HasFactory, SoftDeletes;
+
     protected $with = ['user', 'career', 'studyPlan'];
 
     protected $fillable = [
@@ -22,7 +29,7 @@ class Student extends Model
         'academic_status',
         'admission_date',
         'graduation_date',
-        // Nuevos campos
+        // Datos Demográficos
         'phone',
         'address',
         'gender',
@@ -36,13 +43,15 @@ class Student extends Model
     protected $casts = [
         'admission_date' => 'date',
         'graduation_date' => 'date',
+        'birthday' => 'date',
         'weighted_average' => 'decimal:2',
     ];
 
-    /**
-     * Un perfil de estudiante pertenece a un usuario.
-     */
-    public function user()
+    // ==========================================
+    // RELACIONES ACADÉMICAS BÁSICAS
+    // ==========================================
+
+    public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
@@ -52,36 +61,51 @@ class Student extends Model
         return $query->where('academic_status', 'regular');
     }
 
-
-    /**
-     * Un estudiante pertenece a una carrera.
-     */
-    public function career()
+    public function career(): BelongsTo
     {
         return $this->belongsTo(Career::class);
     }
 
-    /**
-     * Un estudiante pertenece a un plan de estudios.
-     */
-    public function studyPlan()
+    public function studyPlan(): BelongsTo
     {
         return $this->belongsTo(StudyPlan::class);
     }
 
-    /**
-     * Un estudiante puede tener múltiples reservas de matrícula.
-     */
-    public function enrollmentReserves()
+    public function enrollmentReserves(): HasMany
     {
         return $this->hasMany(EnrollmentReserve::class);
     }
 
-    /**
-     * Un estudiante puede tener múltiples matrículas (Enrollments).
-     */
-    public function enrollments()
+    public function enrollments(): HasMany
     {
         return $this->hasMany(Enrollment::class);
+    }
+
+    // ==========================================
+    // RELACIONES DEMOGRÁFICAS (UBIGEO / COLEGIO)
+    // ==========================================
+
+    public function birthLocation(): BelongsTo
+    {
+        return $this->belongsTo(Location::class, 'ubigeo_birth_id', 'iddist');
+    }
+
+    public function originSchool(): BelongsTo
+    {
+        return $this->belongsTo(OriginSchool::class);
+    }
+
+    // ==========================================
+    // RELACIONES: BIENESTAR ESTUDIANTIL
+    // ==========================================
+
+    public function surveyAssignments()
+    {
+        return $this->morphMany(SurveyAssignment::class, 'assignable');
+    }
+
+    public function surveyResponses(): HasMany
+    {
+        return $this->hasMany(SurveyResponse::class);
     }
 }

@@ -12,6 +12,7 @@ class SurveyAnswer extends Model
     protected $fillable = [
         'survey_response_id',
         'survey_question_id',
+        'survey_question_option_id',
         'value',
         'file_path',
         'file_name',
@@ -26,5 +27,10 @@ class SurveyAnswer extends Model
     public function question()
     {
         return $this->belongsTo(SurveyQuestion::class, 'survey_question_id');
+    }
+
+    public function option()
+    {
+        return $this->belongsTo(SurveyQuestionOption::class, 'survey_question_option_id');
     }
 }

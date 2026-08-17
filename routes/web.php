@@ -88,7 +88,9 @@ use App\Livewire\Pages\Teacher\LearningSessionList;
 use App\Livewire\Pages\Teacher\SyllabusEditor;
 use App\Livewire\Pages\Public\ScheduleViewer;
 use App\Http\Controllers\ApplicantPhotoController; // <-- Agrega esta línea
-
+use App\Livewire\Pages\Wellness\Forms\WellnessFormCreate;
+use App\Livewire\Pages\Wellness\Forms\WellnessFormEdit;
+use App\Livewire\Pages\Wellness\Forms\WellnessFormsIndex;
 
 /*
 |--------------------------------------------------------------------------
@@ -113,6 +115,7 @@ Route::middleware([
     'auth:sanctum',
     config('jetstream.auth_session'),
     'verified',
+    'check.wellness',
 ])->group(function () {
     Route::get('/dashboard', function () {
         return view('dashboard');
@@ -213,8 +216,7 @@ Route::prefix('treasury')->middleware(['auth', 'verified', 'permission:registrar
 });
 
 // Grupo de Rutas para Matrícula (Estudiantes y Admin)
-// [MODIFICADO] Añadido middleware de rol
-Route::prefix('enrollment')->middleware(['auth', 'verified', 'role:Estudiante|Administrador'])->name('enrollment.')->group(function () {
+Route::prefix('enrollment')->middleware(['auth', 'verified', 'role:Estudiante|Administrador', 'check.wellness'])->name('enrollment.')->group(function () {
     Route::get('process', EnrollmentProcess::class)->name('process');
 });
 
@@ -305,10 +307,33 @@ Route::prefix('admission')->middleware(['auth', 'verified', 'permission:gestiona
 });
 
 
+// Grupo de Rutas para Bienestar Estudiantil
+Route::prefix('wellness')->middleware(['auth', 'verified', 'permission:gestionar-bienestar'])->name('wellness.')->group(function () {
+    // Formularios
+    Route::get('forms', WellnessFormsIndex::class)->name('forms.index');
+    Route::get('forms/create', WellnessFormCreate::class)->name('forms.create');
+    Route::get('forms/{id}/edit', WellnessFormEdit::class)->name('forms.edit');
+
+    /* // Asignaciones (próximo paso)
+    Route::get('assignments', \App\Livewire\Pages\Wellness\Assignments\WellnessAssignmentManager::class)->name('assignments');
+
+    // Respuestas
+    Route::get('responses', \App\Livewire\Pages\Wellness\Responses\WellnessResponseIndex::class)->name('responses.index');
+    Route::get('responses/{id}', \App\Livewire\Pages\Wellness\Responses\WellnessResponseShow::class)->name('responses.show');
+
+    // Reportes
+    Route::get('reports', \App\Livewire\Pages\Wellness\Reports\WellnessReportGenerator::class)->name('reports'); */
+});
+
+
 
 
 // [NUEVO GRUPO] Grupo de Rutas para Estudiantes
-Route::prefix('student')->middleware(['auth', 'verified', 'role:Estudiante|Administrador'])->name('student.')->group(function () {
+Route::prefix('student')->middleware(['auth', 'verified', 'role:Estudiante|Administrador', 'check.wellness'])->name('student.')->group(function () {
+
+    // [NUEVO] Ruta del Wizard de Bienestar (Excluida internamente en el middleware)
+    Route::get('onboarding', \App\Livewire\Pages\Wellness\Student\StudentOnboardingWizard::class)->name('onboarding');
+
     Route::get('my-activities', MyActivities::class)->middleware('permission:entregar-actividades')->name('my-activities');
     Route::get('my-attendances', MyAttendances::class)->middleware('permission:ver-mis-asistencias')->name('my-attendances');
 });

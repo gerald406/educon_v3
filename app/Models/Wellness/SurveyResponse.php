@@ -2,8 +2,8 @@
 
 namespace App\Models\Wellness;
 
+use App\Models\AcademicPeriod;
 use App\Models\Student;
-use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -14,6 +14,7 @@ class SurveyResponse extends Model
     protected $fillable = [
         'survey_form_id',
         'student_id',
+        'academic_period_id',
         'responded_at',
         'ip_address',
         'user_agent',
@@ -34,6 +35,11 @@ class SurveyResponse extends Model
     public function student()
     {
         return $this->belongsTo(Student::class);
+    }
+
+    public function academicPeriod()
+    {
+        return $this->belongsTo(AcademicPeriod::class);
     }
 
     public function answers()

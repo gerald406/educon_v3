@@ -13,7 +13,8 @@ class Teacher extends Model
 {
     use HasFactory, SoftDeletes;
 
-    protected $with = ['teacher.user', 'didacticUnit', 'academicPeriod'];
+    // protected $with = ['teacher.user', 'didacticUnit', 'academicPeriod'];
+    protected $with = ['user'];
 
     protected $fillable = [
         'user_id',

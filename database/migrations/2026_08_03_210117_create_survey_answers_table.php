@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('survey_response_id')->constrained('survey_responses')->onDelete('cascade');
             $table->foreignId('survey_question_id')->constrained('survey_questions')->onDelete('cascade');
+            $table->foreignId('survey_question_option_id')->nullable()->constrained('survey_question_options')->onDelete('set null');
             $table->text('value')->nullable();
             $table->string('file_path')->nullable();
             $table->string('file_name')->nullable();
@@ -21,6 +22,7 @@ return new class extends Migration
             // Índices
             $table->index(['survey_response_id', 'survey_question_id']);
             $table->index('survey_question_id');
+            $table->index('survey_question_option_id');
         });
     }
 

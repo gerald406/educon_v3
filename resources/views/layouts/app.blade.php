@@ -89,7 +89,8 @@
         <script>
             document.addEventListener('livewire:initialized', () => {
                 Livewire.on('swal', (event) => {
-                    const data = event[0]; 
+                    // const data = event[0]; 
+                    const data = Array.isArray(event) ? event[0] : event;
                     Swal.fire({
                         icon: data.icon || 'success',
                         title: data.title || '¡Hecho!',
@@ -102,7 +103,8 @@
                     });
                 });
                 Livewire.on('swal:confirm', (event) => {
-                    const data = event[0];
+                    // const data = event[0];
+                    const data = Array.isArray(event) ? event[0] : event;
                     Swal.fire({
                         title: data.title || '¿Estás seguro?',
                         text: data.text || '¡No podrás revertir esto!',
