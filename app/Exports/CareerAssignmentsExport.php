@@ -48,9 +48,11 @@ class CareerAssignmentsExport implements FromCollection, WithHeadings, WithMappi
     {
         return [
             'PROGRAMA DE ESTUDIOS',
-            'UNIDAD DIDÁCTICA',
-            'SEMESTRE',
             'DOCENTE',
+            'UNIDAD DIDÁCTICA',
+            'CRÉDITOS',
+            'HORAS SEMANALES',
+            'SEMESTRE',
             'TURNO / SECCIÓN',
         ];
     }
@@ -62,9 +64,11 @@ class CareerAssignmentsExport implements FromCollection, WithHeadings, WithMappi
 
         return [
             $unit?->module?->studyPlan?->career?->name ?? '-',
-            $unit?->name ?? '-',
-            $unit?->semester ?? '-',
             $user ? trim($user->name . ' ' . $user->lastname) : '-',
+            $unit?->name ?? '-',
+            $unit?->credits ?? '-',
+            $unit?->weekly_hours ?? '-',
+            $unit?->semester ?? '-',
             ($assignment->shift->name ?? '-') . ' / ' . strtoupper($assignment->section),
         ];
     }
