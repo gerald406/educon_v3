@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Pages\AcademicProcess\TeacherAssignments;
 
+use App\Exports\CareerAssignmentsExport;
 use App\Models\AcademicPeriod;
 use App\Models\Career;
 use App\Models\DidacticUnit;
@@ -10,10 +11,12 @@ use App\Models\Teacher;
 use App\Models\TeacherAssignment;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithPagination;
+use Maatwebsite\Excel\Facades\Excel;
 
 #[Layout('layouts.app')]
 class TeacherAssignmentManager extends Component
@@ -125,11 +128,11 @@ class TeacherAssignmentManager extends Component
             return;
         }
 
+        $searchTerm = "%{$value}%";
         $this->teacherResults = Teacher::with('user')
-            ->whereHas('user', function ($q) use ($value) {
-                $q->where('name', 'like', '%' . $value . '%')
-                    ->orWhere('lastname', 'like', '%' . $value . '%')
-                    ->orWhere('document_number', 'like', '%' . $value . '%');
+            ->whereHas('user', function ($q) use ($searchTerm) {
+                $q->whereRaw("CONCAT(name, ' ', lastname) LIKE ?", [$searchTerm])
+                    ->orWhere('document_number', 'like', $searchTerm);
             })
             ->where('status', 'active')
             ->take(5)
@@ -272,15 +275,47 @@ class TeacherAssignmentManager extends Component
         $this->status = 'active'; // [REQUERIMIENTO]
     }
 
+    /**
+     * Método para exportar a Excel
+     */
+    public function exportReport()
+    {
+        $this->authorize('gestionar-carga-academica');
+
+        if (empty($this->filterPeriodId)) {
+            $this->dispatch('swal', [
+                'icon' => 'warning',
+                'title' => 'Atención',
+                'text' => 'Debe seleccionar un periodo académico.'
+            ]);
+            return;
+        }
+
+        // Sin programa seleccionado se exportan todos los programas del periodo
+        $period = AcademicPeriod::findOrFail($this->filterPeriodId);
+        $career = $this->filterCareerId ? Career::findOrFail($this->filterCareerId) : null;
+        $fileName = Str::slug('carga academica ' . $period->code . ' ' . ($career->name ?? 'todos los programas'), '_') . '.xlsx';
+
+        return Excel::download(
+            new CareerAssignmentsExport($this->filterPeriodId, $career?->id),
+            $fileName
+        );
+    }
+
     public function render()
     {
-        $query = TeacherAssignment::with(['teacher.user', 'didacticUnit', 'shift'])
+        $query = TeacherAssignment::with(['teacher.user', 'didacticUnit.module.studyPlan.career', 'shift'])
             ->where('academic_period_id', $this->filterPeriodId);
 
+        // Búsqueda por nombre completo concatenado
         if ($this->search) {
-            $query->where(function ($q) {
-                $q->whereHas('didacticUnit', fn($sq) => $sq->where('name', 'like', "%{$this->search}%"))
-                    ->orWhereHas('teacher.user', fn($sq) => $sq->where('name', 'like', "%{$this->search}%")->orWhere('lastname', 'like', "%{$this->search}%"));
+            $searchTerm = "%{$this->search}%";
+            $query->where(function ($q) use ($searchTerm) {
+                $q->whereHas('didacticUnit', fn($sq) => $sq->where('name', 'like', $searchTerm))
+                    ->orWhereHas('teacher.user', function ($sq) use ($searchTerm) {
+                        $sq->whereRaw("CONCAT(name, ' ', lastname) LIKE ?", [$searchTerm])
+                            ->orWhere('document_number', 'like', $searchTerm);
+                    });
             });
         }
 
