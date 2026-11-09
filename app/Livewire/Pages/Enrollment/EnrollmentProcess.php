@@ -8,9 +8,7 @@ use App\Models\DidacticUnit; // <-- [NUEVO] Importar
 use App\Models\Enrollment;
 use App\Models\Registration;
 use App\Models\Student;
-use App\Models\StudentPayment;
 use App\Models\TeacherAssignment;
-use App\Models\PaymentConcept;
 use App\Models\Institution; // <-- [NUEVO]
 
 use Illuminate\Support\Facades\Storage; // <-- [NUEVO]
@@ -37,8 +35,7 @@ class EnrollmentProcess extends Component
     public Collection $schedules; // Horarios para la vista
 
     // --- ESTADO DE LA MATRÍCULA ---
-    public $step = 'loading'; // loading, payment, confirmation, confirmed
-    public ?StudentPayment $pendingEnrollmentPayment = null;
+    public $step = 'loading'; // loading, confirmation, confirmed
     public $hasConflicts = false; // Flag para bloquear la matrícula
 
     /**
@@ -71,32 +68,8 @@ class EnrollmentProcess extends Component
             ->where('academic_period_id', $this->activePeriod->id)
             ->first();
 
-        // 3. Revisar pago de matrícula
-        $this->checkPaymentStatus();
-    }
-
-    /**
-     * Revisa el estado del pago de matrícula.
-     */
-    public function checkPaymentStatus()
-    {
-        $enrollmentConcept = PaymentConcept::where('code', 'MAT-REG')->first();
-        if (!$enrollmentConcept) {
-            $this->step = 'error';
-            return;
-        }
-
-        $this->pendingEnrollmentPayment = StudentPayment::where('student_id', $this->student->id)
-            ->where('academic_period_id', $this->activePeriod->id)
-            ->where('payment_concept_id', $enrollmentConcept->id)
-            ->where('status', 'pending')
-            ->first();
-
-        if ($this->pendingEnrollmentPayment) {
-            $this->step = 'payment'; // El estudiante DEBE pagar primero
-        } else {
-            $this->calculateEnrollmentCourses(); // El estudiante ya pagó, calcular cursos
-        }
+        // 3. [MODIFICADO] Ya no se exige pago de matrícula: calcular cursos directamente
+        $this->calculateEnrollmentCourses();
     }
 
     /**

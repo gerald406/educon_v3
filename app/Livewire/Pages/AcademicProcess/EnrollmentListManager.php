@@ -61,7 +61,7 @@ class EnrollmentListManager extends Component
         $this->resetPage();
     }
 
-    // --- ACCIÓN: ELIMINAR (LIBERAR VOUCHER) ---
+    // --- ACCIÓN: ELIMINAR ---
     public function deleteEnrollment($id)
     {
         try {
@@ -71,7 +71,7 @@ class EnrollmentListManager extends Component
             $this->dispatch('swal', [
                 'icon' => 'success',
                 'title' => 'Matrícula Anulada',
-                'text' => 'Se ha eliminado la matrícula y liberado el comprobante de pago asociado.'
+                'text' => 'Se ha eliminado la matrícula y liberado los cupos de sus secciones.'
             ]);
         } catch (\Exception $e) {
             $this->dispatch('swal', ['icon' => 'error', 'title' => 'Error', 'text' => $e->getMessage()]);
@@ -82,7 +82,7 @@ class EnrollmentListManager extends Component
     {
         $this->dispatch('swal:confirm', [
             'title' => '¿Anular Matrícula?',
-            'text' => 'Esta acción eliminará la inscripción a cursos y LIBERARÁ EL VOUCHER de pago para ser usado nuevamente. ¿Continuar?',
+            'text' => 'Esta acción eliminará la matrícula y la inscripción a cursos. ¿Continuar?',
             'id' => $id,
             'onConfirmed' => 'deleteEnrollmentConfirmed'
         ]);

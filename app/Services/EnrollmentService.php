@@ -9,9 +9,6 @@ use App\Models\Student;
 use App\Models\StudentPayment;
 use App\Models\SystemSetting;
 use App\Models\TeacherAssignment;
-use App\Models\Voucher;
-use App\Models\VoucherSeries; // [NUEVO] Importar modelo
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class EnrollmentService
@@ -56,50 +53,6 @@ class EnrollmentService
             'recovery' => $availableAssignments->whereIn('didactic_unit_id', $failedUnitIds),
         ];
     }
-
-    /**
-     * [NUEVO] Obtiene las series de comprobantes activas para mostrarlas en el select.
-     */
-    public function getActiveVoucherSeries(): Collection
-    {
-        return VoucherSeries::where('status', 'active')
-            ->orderBy('voucher_type')
-            ->get();
-    }
-
-    public function validateVoucher(string $series, string $number, int $studentUserId): Voucher
-    {
-        // Convertimos a mayúsculas por si acaso
-        $series = strtoupper(trim($series));
-
-        // A. Buscar Voucher
-        $voucher = Voucher::where('series', $series)
-            ->where('number', $number)
-            ->where('status', 'issued')
-            ->first();
-
-        if (!$voucher) {
-            throw new \Exception("El comprobante {$series}-{$number} no existe en el sistema o fue anulado.");
-        }
-
-        // B. Verificar Cliente
-        if ($voucher->client_id !== $studentUserId) {
-            // Nota: Podríamos relajar esto si paga un apoderado, pero por seguridad inicial lo mantenemos.
-            throw new \Exception("El comprobante pertenece al usuario: {$voucher->client->name} {$voucher->client->lastname}, no al estudiante seleccionado.");
-        }
-
-        // C. Verificar Uso
-        $isUsed = $voucher->studentPayments()
-            ->whereHas('paymentConcept', fn($q) => $q->where('code', 'MAT-REG'))
-            ->exists();
-
-        if ($isUsed) {
-            throw new \Exception("Este comprobante ya fue utilizado en otra matrícula.");
-        }
-
-        return $voucher;
-    }
-
 
     /**
      * [NUEVO] Elimina una matrícula y libera el voucher asociado.

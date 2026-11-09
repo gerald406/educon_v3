@@ -37,11 +37,6 @@ use App\Livewire\Pages\Teacher\CumulativeAttendanceReport;
 
 use App\Livewire\Pages\Enrollment\EnrollmentProcess;
 
-use App\Livewire\Pages\Treasury\PaymentManager;
-use App\Livewire\Pages\Treasury\CashSessionManager;
-use App\Livewire\Pages\Treasury\VoucherSeriesManager;
-use App\Livewire\Pages\Treasury\TupaPointOfSale;
-use App\Livewire\Pages\Treasury\CreditNoteManager;
 
 use App\Livewire\Pages\Certification\CertificateManager;
 use App\Livewire\Pages\Certification\InternshipManager;
@@ -67,8 +62,6 @@ use App\Livewire\Pages\Student\MyAttendances;
 
 use App\Livewire\Pages\Communication\AnnouncementManager;
 
-use App\Http\Controllers\VoucherController;
-use App\Http\Controllers\CashSessionController;
 use App\Http\Controllers\ExamReportController;
 use App\Http\Controllers\ScheduleReportController;
 use App\Http\Controllers\StudentReportController;
@@ -200,20 +193,7 @@ Route::prefix('evaluation')->middleware(['auth', 'verified', 'role:Docente|Coord
     Route::get('attendances', AttendanceManager::class)->name('attendances');
 });
 
-// Grupo de Rutas para Tesorería
-// [MODIFICADO] Añadido middleware de permiso
-Route::prefix('treasury')->middleware(['auth', 'verified', 'permission:registrar-pagos'])->name('treasury.')->group(function () {
-    Route::get('payments', PaymentManager::class)->name('payments');
-    Route::get('cash-sessions', CashSessionManager::class)->middleware('permission:gestionar-sesiones-caja')->name('cash-sessions');
-    Route::get('voucher-series', VoucherSeriesManager::class)->middleware('permission:gestionar-correlativos')->name('voucher-series');
-    Route::get('tupa-pos', TupaPointOfSale::class)->middleware('permission:registrar-tramites')->name('tupa-pos');
-    Route::get('voucher/{voucher}/download', [VoucherController::class, 'download'])->name('voucher.download');
-    Route::get('credit-notes', CreditNoteManager::class)->middleware('permission:anular-comprobantes')->name('credit-notes');
-    Route::get('credit-note/{creditNote}/download', [VoucherController::class, 'downloadCreditNote'])->name('credit-note.download');
-    Route::get('cash-session/{session}/report/{type}', [CashSessionController::class, 'download'])
-        ->where('type', 'x|z') // Solo permite 'x' o 'z'
-        ->name('cash-session.report');
-});
+// [MODIFICADO] Módulo de Tesorería (caja, pagos, TUPA, comprobantes) retirado
 
 // Grupo de Rutas para Matrícula (Estudiantes y Admin)
 Route::prefix('enrollment')->middleware(['auth', 'verified', 'role:Estudiante|Administrador', 'check.wellness'])->name('enrollment.')->group(function () {
@@ -343,8 +323,6 @@ Route::prefix('communication')->middleware(['auth', 'verified', 'permission:gest
     Route::get('announcements', AnnouncementManager::class)->name('announcements');
 });
 
-
-//Route::get('voucher/{voucher}/download', [VoucherController::class, 'download'])->name('voucher.download');
 
 Route::prefix('security')->middleware(['auth', 'verified', 'permission:gestionar-roles'])->name('security.')->group(function () {
     Route::get('roles', RoleManager::class)->name('roles');

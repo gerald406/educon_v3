@@ -10,7 +10,6 @@ use App\Models\Module;
 use App\Models\Registration;
 use App\Models\Student;
 use App\Models\TeacherAssignment;
-use App\Models\Voucher;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
@@ -29,7 +28,6 @@ class ReincorporationManager extends Component
     public ?EnrollmentReserve $lastReservation = null;
 
     // --- FORMULARIO ---
-    public $voucherNumber = '';
     public $semesterEnrolled = ''; // Ahora se calculará automáticamente
     public $notes = '';
 
@@ -89,34 +87,15 @@ class ReincorporationManager extends Component
         }
 
         $this->resetValidation();
-        $this->voucherNumber = '';
         $this->notes = '';
         $this->isModalOpen = true;
     }
 
     public function processReincorporation()
     {
-        $this->validate([
-            'voucherNumber' => 'required|string',
-        ]);
-
-        // Validar Voucher
-        $voucher = Voucher::where('number', $this->voucherNumber)
-            ->where('client_id', $this->selectedStudent->user_id)
-            ->where('status', 'issued')
-            ->first();
-
-        if (!$voucher) {
-            $this->dispatch('swal', [
-                'icon' => 'error',
-                'title' => 'Voucher no válido',
-                'text' => 'Comprobante no encontrado o no pertenece al estudiante.'
-            ]);
-            return;
-        }
-
+        // [MODIFICADO] Ya no se exige comprobante de pago
         try {
-            DB::transaction(function () use ($voucher) {
+            DB::transaction(function () {
 
                 // 1. Cerrar Reserva (FIX: Verifica el valor correcto del ENUM)
                 if ($this->lastReservation) {
@@ -137,8 +116,7 @@ class ReincorporationManager extends Component
                         'enrollment_type' => 'reincorporation',
                         'payment_status' => 'paid',
                         'status' => 'active',
-                        'notes' => "Reincorporación. Voucher: {$voucher->series}-{$voucher->number}. " . $this->notes,
-                        'amount_paid' => $voucher->total_amount,
+                        'notes' => 'Reincorporación. ' . $this->notes,
                         'enrollment_date' => now(),
                     ]
                 );

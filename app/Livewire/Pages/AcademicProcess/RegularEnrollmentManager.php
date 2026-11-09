@@ -4,12 +4,9 @@ namespace App\Livewire\Pages\AcademicProcess;
 
 use App\Models\AcademicPeriod;
 use App\Models\Enrollment;
-use App\Models\PaymentConcept;
 use App\Models\Registration;
 use App\Models\Student;
-use App\Models\StudentPayment;
 use App\Services\EnrollmentService;
-use App\Models\VoucherSeries; // <--- IMPORTANTE: Asegúrate de tener esto
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
@@ -29,10 +26,8 @@ class RegularEnrollmentManager extends Component
     public Collection $proposalRegular;
     public Collection $proposalRecovery;
 
-    // --- Formulario de Pago ---
-    public Collection $availableSeries;
-    public $voucherSeries = '';
-    public $voucherNumber = '';
+    // --- Formulario ---
+    // [MODIFICADO] Ya no se exige comprobante de pago para matricular
     public $notes = '';
 
     public function mount()
@@ -41,27 +36,10 @@ class RegularEnrollmentManager extends Component
         $this->searchResults = collect();
         $this->proposalRegular = collect();
         $this->proposalRecovery = collect();
-        $this->availableSeries = collect();
 
         // 1. Cargar Periodo Activo
         $this->activePeriod = AcademicPeriod::where('status', 'active')->first();
 
-        // 2. Cargar Series de Comprobantes Activas (Integración con Tesorería)
-        try {
-            // Usamos el servicio O directamente el modelo, ambas formas son válidas.
-            // Aquí lo hacemos directo para asegurar que cargue si el servicio no tiene el método.
-            $this->availableSeries = VoucherSeries::where('status', 'active')
-                ->orderBy('voucher_type')
-                ->orderBy('series')
-                ->get();
-
-            // Pre-seleccionar la primera serie si existe (ej. R25)
-            if ($this->availableSeries->isNotEmpty()) {
-                $this->voucherSeries = $this->availableSeries->first()->series;
-            }
-        } catch (\Exception $e) {
-            // Si falla, no rompe la vista
-        }
     }
 
     public function updatedSearch($value)
@@ -82,7 +60,7 @@ class RegularEnrollmentManager extends Component
 
     public function selectStudent($studentId)
     {
-        $this->reset('voucherNumber', 'notes');
+        $this->reset('notes');
 
         $this->selectedStudent = Student::with('user', 'career', 'studyPlan')->find($studentId);
         $this->search = '';
@@ -132,11 +110,6 @@ class RegularEnrollmentManager extends Component
 
     public function confirmEnrollment()
     {
-        $this->validate([
-            'voucherSeries' => 'required|string',
-            'voucherNumber' => 'required|numeric',
-        ]);
-
         if ($this->proposalRegular->isEmpty() && $this->proposalRecovery->isEmpty()) {
             $this->dispatch('swal', ['icon' => 'error', 'title' => 'Imposible Matricular', 'text' => 'No hay cursos disponibles para inscribir.']);
             return;
@@ -144,16 +117,7 @@ class RegularEnrollmentManager extends Component
 
         try {
             DB::transaction(function () {
-                $service = app(EnrollmentService::class);
-
-                // A. Validar Voucher (Serie + Número)
-                $voucher = $service->validateVoucher(
-                    $this->voucherSeries,
-                    $this->voucherNumber,
-                    $this->selectedStudent->user_id
-                );
-
-                // B. Crear Cabecera
+                // A. Crear Cabecera
                 // Ajustamos el tipo de matrícula. Si tu BD es varchar(50) usa strings largos.
                 $enrollmentType = $this->proposalRecovery->isNotEmpty() ? 'regular_with_recovery' : 'regular';
 
@@ -164,30 +128,12 @@ class RegularEnrollmentManager extends Component
                     'enrollment_type' => $enrollmentType,
                     'status' => 'active',
                     'payment_status' => 'paid',
-                    'amount_paid' => $voucher->total_amount,
-                    'notes' => "Pago: {$this->voucherSeries}-{$this->voucherNumber}. " . $this->notes,
+                    'notes' => $this->notes,
                     'registered_by_user_id' => auth()->id(),
                     'enrollment_date' => now(),
                 ]);
 
-                // C. Vincular Pago
-                $concept = PaymentConcept::where('code', 'MAT-REG')->first();
-
-                StudentPayment::create([
-                    'student_id' => $this->selectedStudent->id,
-                    'payment_concept_id' => $concept?->id,
-                    'academic_period_id' => $this->activePeriod->id,
-                    'voucher_id' => $voucher->id,
-                    'original_amount' => $concept?->amount ?? 0,
-                    'final_amount' => $voucher->total_amount,
-                    'due_date' => now(), // CORRECCIÓN SQL CRÍTICA
-                    'payment_date' => now(),
-                    'status' => 'paid',
-                    'registered_by_user_id' => auth()->id(),
-                    'notes' => 'Pago automático Matrícula Regular.',
-                ]);
-
-                // D. Inscribir Cursos
+                // B. Inscribir Cursos
                 $allAssignments = $this->proposalRegular->merge($this->proposalRecovery);
 
                 foreach ($allAssignments as $assignment) {
@@ -202,7 +148,7 @@ class RegularEnrollmentManager extends Component
                     $assignment->increment('current_enrolled');
                 }
 
-                // E. Actualizar Estudiante
+                // C. Actualizar Estudiante
                 if ($this->selectedStudent->current_semester < $this->nextSemester) {
                     $this->selectedStudent->update(['current_semester' => $this->nextSemester]);
                 }
@@ -222,7 +168,7 @@ class RegularEnrollmentManager extends Component
 
             $this->dispatch('open-pdf', url: $pdfUrl);
 
-            $this->reset('selectedStudent', 'voucherNumber', 'notes', 'proposalRegular', 'proposalRecovery');
+            $this->reset('selectedStudent', 'notes', 'proposalRegular', 'proposalRecovery');
         } catch (\Exception $e) {
             $this->dispatch('swal', ['icon' => 'error', 'title' => 'Error', 'text' => $e->getMessage()]);
         }

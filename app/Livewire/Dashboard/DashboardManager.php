@@ -26,7 +26,7 @@ class DashboardManager extends Component
         } elseif ($user->hasRole('Estudiante')) {
             $this->viewToRender = 'dashboard.student-dashboard';
         
-        } elseif ($user->hasAnyRole(['Secretario Academico', 'Tesoreria'])) {
+        } elseif ($user->hasRole('Secretario Academico')) {
             $this->viewToRender = 'dashboard.admin-dashboard';
         
         } else {

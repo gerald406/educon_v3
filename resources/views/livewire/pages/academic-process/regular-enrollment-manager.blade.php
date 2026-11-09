@@ -74,30 +74,9 @@
 
                             <div class="bg-white p-6 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
                                 <div class="absolute top-0 left-0 w-1 h-full bg-green-500"></div>
-                                <h4 class="font-bold text-gray-700 mb-4">Validación de Pago</h4>
+                                <h4 class="font-bold text-gray-700 mb-4">Observaciones</h4>
                                 <div class="space-y-4">
                                     
-                                    <div>
-                                        <x-label value="Serie" />
-                                        <select wire:model="voucherSeries" class="w-full border-gray-300 rounded-md text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                                            @if($availableSeries && $availableSeries->isNotEmpty())
-                                                @foreach($availableSeries as $s)
-                                                    <option value="{{ $s->series }}">
-                                                        {{ $s->series }} ({{ ucfirst(str_replace('_', ' ', $s->voucher_type)) }})
-                                                    </option>
-                                                @endforeach
-                                            @else
-                                                <option value="">Sin series configuradas</option>
-                                            @endif
-                                        </select>
-                                        <x-input-error for="voucherSeries" />
-                                    </div>
-
-                                    <div>
-                                        <x-label value="Número" />
-                                        <x-input type="number" wire:model="voucherNumber" class="w-full" placeholder="Ej. 7" />
-                                        <x-input-error for="voucherNumber" />
-                                    </div>
                                     <div>
                                         <x-label value="Notas" />
                                         <textarea wire:model="notes" class="w-full border-gray-300 rounded-md text-sm h-20 placeholder-gray-400"></textarea>

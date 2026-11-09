@@ -340,18 +340,6 @@
                         <p class="text-xs text-gray-500 mt-1">Este código se ha generado automáticamente.</p>
                     </div>
 
-                    <div class="bg-green-50 p-4 rounded-md border border-green-200">
-                        <h4 class="font-bold text-green-900 text-sm mb-2">3. Validación de Pago (Caja)</h4>
-                        <x-label value="Número de Recibo / Voucher" class="mb-1" />
-                        <div class="flex gap-2">
-                            <x-input type="text" class="w-full" wire:model="migrationVoucherNumber" placeholder="Ingrese el Nro. de Recibo (ej. 123)" />
-                        </div>
-                        <p class="text-xs text-green-700 mt-2">
-                            El estudiante debe haber pagado su derecho de matrícula en Caja previamente. 
-                            Ingrese el número del comprobante para validar y procesar la matrícula automática.
-                        </p>
-                    </div>
-
                     <div class="border-t pt-4 mt-4">
                         <p class="text-sm text-gray-600">
                             Al confirmar:

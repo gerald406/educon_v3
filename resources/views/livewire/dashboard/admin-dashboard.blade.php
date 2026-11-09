@@ -1,5 +1,5 @@
 <div>
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         
         <div class="bg-white overflow-hidden shadow-xl sm:rounded-lg">
             <div class="p-6">
@@ -20,20 +20,6 @@
                 <p class="text-sm font-medium text-gray-500 truncate">Programas Activos</p>
                 <p class="mt-1 text-3xl font-semibold text-gray-900">{{ $careerCount }}</p>
             </div>
-        </div>
-
-        <div class="bg-white overflow-hidden shadow-xl sm:rounded-lg">
-            <div class="p-6">
-                <p class="text-sm font-medium text-gray-500 truncate">Ingresos de Caja (Hoy)</p>
-                <p class="mt-1 text-3xl font-semibold text-green-600">S/ {{ number_format($todayPayments, 2) }}</p>
-            </div>
-            @can('registrar-pagos')
-            <div class="bg-gray-50 px-6 py-3">
-                <a href="{{ route('treasury.payments') }}" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">
-                    Ir a Caja &rarr;
-                </a>
-            </div>
-            @endcan
         </div>
 
     </div>

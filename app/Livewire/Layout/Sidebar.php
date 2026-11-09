@@ -24,7 +24,6 @@ class Sidebar extends Component
             'gestionar-carga-academica',
             'gestionar-horarios',
             'aprobar-silabos',
-            'registrar-pagos',
             'gestionar-certificacion',
             'gestionar-biblioteca'
         ])) {

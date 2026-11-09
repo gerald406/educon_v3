@@ -18,7 +18,6 @@ use App\Models\Registration; // [NUEVO]
 use App\Models\StudentPayment; // Importar
 use App\Models\StudyPlan;
 use App\Models\TeacherAssignment; // [NUEVO]
-use App\Models\Voucher;      // [NUEVO]
 // use App\livewire\Pages\Admission\On;
 use Livewire\Attributes\On;
 
@@ -96,8 +95,6 @@ class ApplicantManager extends Component
     public $selectedMigrationStudyPlanId = '';
     public $migrationStudentCode = ''; // Para previsualizar o editar el código
 
-    // [NUEVO] Campo para el Voucher
-    public $migrationVoucherNumber = '';
 
     protected function personService()
     {
@@ -325,7 +322,6 @@ class ApplicantManager extends Component
         }
 
         $this->migrationStudentCode = "E{$year}-" . str_pad($sequence, 5, '0', STR_PAD_LEFT);
-        $this->migrationVoucherNumber = ''; // Resetear voucher
 
         $this->isMigrationModalOpen = true;
     }
@@ -338,28 +334,10 @@ class ApplicantManager extends Component
         $this->validate([
             'selectedMigrationStudyPlanId' => 'required|exists:study_plans,id',
             'migrationStudentCode' => 'required|unique:students,code',
-            'migrationVoucherNumber' => 'required|string', // Validar que ingresó algo
         ]);
 
-        // 1. Validar Voucher
-        // Buscamos un voucher emitido a este usuario que no esté anulado
-
-        // 1. Validar Voucher
-        $voucher = Voucher::where('number', $this->migrationVoucherNumber)
-            ->where('client_id', $this->migratingApplicant->user_id)
-            ->where('status', 'issued')
-            ->first();
-
-        if (!$voucher) {
-            $this->dispatch('swal', [
-                'icon' => 'error',
-                'title' => 'Voucher no válido',
-                'text' => 'No se encontró un comprobante válido con ese número para este postulante.'
-            ]);
-            return;
-        }
-
-        DB::transaction(function () use ($voucher) {
+        // [MODIFICADO] Ya no se exige comprobante de pago para matricular al ingresante
+        DB::transaction(function () {
             $applicant = $this->migratingApplicant;
             $offering = $applicant->admissionOffering;
 
@@ -398,8 +376,7 @@ class ApplicantManager extends Component
                     'enrollment_type' => 'first_time',
                     'payment_status' => 'paid',
                     'status' => 'active',
-                    'notes' => "Matrícula automática (Ingresante). Voucher: {$voucher->series}-{$voucher->number}",
-                    'amount_paid' => $voucher->total_amount
+                    'notes' => 'Matrícula automática (Ingresante).',
                 ]);
 
                 // [FIX] Obtener IDs de Módulos primero, luego buscar Unidades Didácticas

@@ -5,7 +5,6 @@ namespace App\Livewire\Dashboard;
 use App\Models\AcademicPeriod;
 use App\Models\Career;
 use App\Models\Student;
-use App\Models\StudentPayment;
 use App\Models\Syllabus;
 use App\Models\Teacher;
 use App\Models\TeacherAssignment;
@@ -23,7 +22,6 @@ class AdminDashboard extends Component
     public $careerCount = 0;
     public $pendingSyllabi = 0;
     public $assignmentCount = 0;
-    public $todayPayments = 0;
     
     // --- Propiedades para las Tablas ---
     public Collection $studentsPerCareer;
@@ -45,11 +43,6 @@ class AdminDashboard extends Component
         
         // 3. Total Programas de Estudio Activos
         $this->careerCount = Career::where('status', 'active')->count();
-
-        // 4. Total Pagos de Hoy
-        $this->todayPayments = StudentPayment::where('status', 'paid')
-                                ->whereDate('payment_date', today())
-                                ->sum('final_amount');
 
         // --- Cargar KPIs del Periodo Activo ---
         if ($this->activePeriod) {

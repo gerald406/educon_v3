@@ -85,7 +85,7 @@ class User extends Authenticatable
             return false;
         }
 
-        // 3. Lógica original para otros roles del sistema (ej. Admisión, Tesorería)
+        // 3. Lógica original para otros roles del sistema (ej. Admisión)
         $adminPermissions = [
             'gestionar-institucion',
             'gestionar-configuracion',
@@ -97,11 +97,6 @@ class User extends Authenticatable
             'gestionar-carga-academica',
             'gestionar-horarios',
             'aprobar-silabos',
-            'registrar-pagos',
-            'gestionar-sesiones-caja',
-            'gestionar-correlativos',
-            'registrar-tramites',
-            'anular-comprobantes',
             'gestionar-certificacion',
             'gestionar-cuadro-meritos',
             'gestionar-biblioteca',

@@ -14,12 +14,6 @@
                         <p class="text-center text-gray-500">Cargando información de matrícula...</p>
                     @elseif($step == 'error')
                         <p class="text-center text-red-600">No se pudo cargar el proceso de matrícula. (Sin periodo activo o sin perfil de estudiante).</p>
-                    @elseif($step == 'payment')
-                        <div class="text-center text-red-700 p-10 border-red-200 border rounded-md bg-red-50">
-                            <h3 class="text-xl font-semibold">Matrícula Pendiente de Pago</h3>
-                            <p class="mt-2">Se ha detectado una deuda de matrícula pendiente para el periodo <strong>{{ $activePeriod->name }}</strong>.</p>
-                            <p class="mt-4">Por favor, acérquese a Tesorería para regularizar su pago y poder continuar con su matrícula.</p>
-                        </div>
                     @endif
 
 

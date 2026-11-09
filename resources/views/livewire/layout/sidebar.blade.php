@@ -199,35 +199,6 @@
             </div>
         @endcanany
 
-        @canany(['registrar-pagos', 'gestionar-sesiones-caja', 'gestionar-correlativos', 'registrar-tramites', 'anular-comprobantes'])
-            <div class="mb-1" x-data="{ open: {{ request()->routeIs('treasury.*') ? 'true' : 'false' }} }">
-                <button @click="open = !open" class="w-full flex justify-between items-center px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white">
-                    <span class="flex items-center">
-                        <svg class="h-6 w-6 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        Tesorería
-                    </span>
-                    <svg :class="{'rotate-180': open}" class="h-5 w-5 transform transition-transform" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
-                </button>
-                <div x-show="open" class="mt-1 space-y-1 ml-6" x-collapse>
-                    @can('gestionar-sesiones-caja')
-                        <a href="{{ route('treasury.cash-sessions') }}" class="block px-3 py-2 rounded-md text-sm font-medium {{ request()->routeIs('treasury.cash-sessions') ? 'text-white' : 'text-gray-400 hover:text-white' }}">Apertura/Cierre de Caja</a>
-                    @endcan
-                    @can('registrar-tramites')
-                        <a href="{{ route('treasury.tupa-pos') }}" class="block px-3 py-2 rounded-md text-sm font-medium {{ request()->routeIs('treasury.tupa-pos') ? 'text-white' : 'text-gray-400 hover:text-white' }}">POS (TUPA)</a>
-                    @endcan
-                    @can('registrar-pagos')
-                        <a href="{{ route('treasury.payments') }}" class="block px-3 py-2 rounded-md text-sm font-medium {{ request()->routeIs('treasury.payments') ? 'text-white' : 'text-gray-400 hover:text-white' }}">Gestión de Deudas</a>
-                    @endcan
-                    @can('anular-comprobantes')
-                        <a href="{{ route('treasury.credit-notes') }}" class="block px-3 py-2 rounded-md text-sm font-medium {{ request()->routeIs('treasury.credit-notes') ? 'text-white' : 'text-gray-400 hover:text-white' }}">Notas de Crédito</a>
-                    @endcan
-                    @can('gestionar-correlativos')
-                        <a href="{{ route('treasury.voucher-series') }}" class="block px-3 py-2 rounded-md text-sm font-medium {{ request()->routeIs('treasury.voucher-series') ? 'text-white' : 'text-gray-400 hover:text-white' }}">Correlativos</a>
-                    @endcan
-                </div>
-            </div>
-        @endcanany
-
         @can('gestionar-certificacion')
             <div class="mb-1" x-data="{ open: {{ request()->routeIs('certification.*') ? 'true' : 'false' }} }">
                 <button @click="open = !open" class="w-full flex justify-between items-center px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-700 hover:text-white">

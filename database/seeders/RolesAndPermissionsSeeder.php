@@ -48,10 +48,6 @@ class RolesAndPermissionsSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'entregar-actividades']); // Añadido Fase 82
         Permission::firstOrCreate(['name' => 'ver-mis-asistencias']);
 
-        // Módulo Tesorería
-        Permission::firstOrCreate(['name' => 'registrar-pagos']);
-        // Permission::firstOrCreate(['name' => 'gestionar-sesiones-caja']); // Para Tesorería
-
         // Módulo Certificación
         Permission::firstOrCreate(['name' => 'gestionar-certificacion']);
 
@@ -76,13 +72,6 @@ class RolesAndPermissionsSeeder extends Seeder
         Permission::firstOrCreate(['name' => 'ver-reporte-asistencia']);
         Permission::firstOrCreate(['name' => 'descargar-acta-final']);
         Permission::firstOrCreate(['name' => 'ver-reporte-acumulativo-asistencia']);
-
-
-        // --- [NUEVOS PERMISOS DE TESORERÍA] ---
-        Permission::firstOrCreate(['name' => 'gestionar-sesiones-caja']); // Apertura/Cierre
-        Permission::firstOrCreate(['name' => 'gestionar-correlativos']); // CRUD de Series (B001)
-        Permission::firstOrCreate(['name' => 'anular-comprobantes']); // Notas de Crédito
-        Permission::firstOrCreate(['name' => 'registrar-tramites']); // Punto de Venta TUPA
 
 
         Permission::firstOrCreate(['name' => 'gestionar-actividades']);
@@ -146,14 +135,6 @@ class RolesAndPermissionsSeeder extends Seeder
             'gestionar-reservas-matricula',
             'gestionar-reincorporaciones',
             'gestionar-matricula-regular',
-        ]);
-
-        // Rol Tesorería (Caja)
-        $roleTreasury = Role::firstOrCreate(['name' => 'Tesoreria']);
-        $roleTreasury->syncPermissions([
-            'registrar-pagos', // Pagar deudas
-            'gestionar-sesiones-caja', // Abrir/Cerrar caja
-            'registrar-tramites', // Registrar pagos TUPA
         ]);
 
         // Rol Admisión

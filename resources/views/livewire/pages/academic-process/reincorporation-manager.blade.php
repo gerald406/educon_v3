@@ -74,17 +74,6 @@
 
         <x-slot name="content">
             <div class="space-y-4">
-                <div class="bg-green-50 p-4 rounded-md border border-green-200">
-                    <h4 class="font-bold text-green-900 text-sm mb-2">Validación de Pago (Caja)</h4>
-                    <x-label value="Número de Recibo / Voucher" class="mb-1" />
-                    <div class="flex gap-2">
-                        <x-input type="text" class="w-full" wire:model="voucherNumber" placeholder="Ingrese el Nro. de Recibo" />
-                    </div>
-                    <p class="text-xs text-green-700 mt-2">
-                        Ingrese el comprobante de pago por derecho de matrícula para validar.
-                    </p>
-                </div>
-
                 <div>
                     <x-label value="Semestre de Reincorporación (Automático)" />
                     <div class="relative">
