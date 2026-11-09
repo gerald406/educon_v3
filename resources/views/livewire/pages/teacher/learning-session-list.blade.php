@@ -25,15 +25,31 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white overflow-hidden shadow-xl sm:rounded-lg p-6">
 
-                @foreach($syllabus->indicators as $indicator)
-                    {{-- Encabezado del indicador --}}
+                {{-- [MODIFICADO] Grupos: un bloque por indicador + bloque de recuperación (semanas 17-18) --}}
+                @php
+                    $groups = $syllabus->indicators->map(fn ($indicator) => [
+                        'label' => 'Indicador de Logro',
+                        'title' => $indicator->description,
+                        'units' => $indicator->units,
+                    ]);
+                    if ($syllabus->recoveryUnits->isNotEmpty()) {
+                        $groups->push([
+                            'label' => 'Semanas 17 y 18',
+                            'title' => \App\Models\SyllabusUnit::RECOVERY_SECTION_TITLE,
+                            'units' => $syllabus->recoveryUnits,
+                        ]);
+                    }
+                @endphp
+
+                @foreach($groups as $group)
+                    {{-- Encabezado del grupo --}}
                     <div class="mb-2 mt-6 first:mt-0">
                         <div class="bg-gray-100 border border-gray-300 rounded-lg px-4 py-2">
                             <span class="text-xs font-bold text-gray-500 uppercase tracking-wide">
-                                Indicador de Logro
+                                {{ $group['label'] }}
                             </span>
                             <p class="text-sm font-semibold text-gray-800 mt-0.5">
-                                {{ $indicator->description }}
+                                {{ $group['title'] }}
                             </p>
                         </div>
                     </div>
@@ -64,7 +80,7 @@
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-200">
-                                @foreach($indicator->units as $unit)
+                                @foreach($group['units'] as $unit)
                                     @php
                                         $session = $unit->learningSession;
                                         $status  = $session?->status ?? 'pending';
@@ -161,13 +177,7 @@
                 @endforeach
 
                 {{-- Resumen de progreso --}}
-                @php
-                    $totalUnits     = $syllabus->indicators->flatMap->units->count();
-                    $completedUnits = $syllabus->indicators->flatMap->units
-                        ->filter(fn($u) => in_array($u->learningSession?->status, ['completed', 'executed']))
-                        ->count();
-                    $percent = $totalUnits > 0 ? round(($completedUnits / $totalUnits) * 100) : 0;
-                @endphp
+                {{-- [MODIFICADO] $totalUnits, $completedUnits y $percent se calculan en el componente (incluyen recuperación) --}}
                 <div class="mt-6 border-t pt-4">
                     <div class="flex items-center justify-between mb-1">
                         <span class="text-sm text-gray-600 font-medium">

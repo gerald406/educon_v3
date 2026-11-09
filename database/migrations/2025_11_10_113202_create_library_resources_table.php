@@ -2,6 +2,7 @@
 
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
@@ -36,7 +37,11 @@ return new class extends Migration
             $table->timestamps();
             
             // Índice FullText para búsquedas
-            $table->fullText(['title', 'author', 'description']);
+            // [CORREGIDO] Solo MySQL: SQLite (tests) no soporta índices FULLTEXT.
+            // Ya ejecutada en producción (MySQL), donde el comportamiento no cambia.
+            if (DB::getDriverName() === 'mysql') {
+                $table->fullText(['title', 'author', 'description']);
+            }
         });
     }
 

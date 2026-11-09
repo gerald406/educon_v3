@@ -36,9 +36,8 @@ class LearningSessionList extends Component
      */
     protected function generateMissingSessions(): void
     {
-        $units = SyllabusUnit::whereHas('indicator', function ($q) {
-            $q->where('syllabus_id', $this->syllabus->id);
-        })->get();
+        // [MODIFICADO] Incluye las semanas 17-18 de recuperación
+        $units = SyllabusUnit::ofSyllabus($this->syllabus->id)->get();
 
         foreach ($units as $unit) {
             // [MODIFICADO] Plantilla centralizada en el modelo
@@ -56,10 +55,12 @@ class LearningSessionList extends Component
             'teacherAssignment.academicPeriod',
             'teacherAssignment.teacher.user',
             'indicators.units.learningSession',
+            'recoveryUnits.learningSession', // [NUEVO]
         ]);
 
-        // Calcular progreso
-        $allUnits       = $this->syllabus->indicators->flatMap->units;
+        // Calcular progreso (incluye las semanas de recuperación)
+        $allUnits       = $this->syllabus->indicators->flatMap->units
+            ->concat($this->syllabus->recoveryUnits);
         $totalUnits     = $allUnits->count();
         $completedUnits = $allUnits->filter(
             fn($u) => in_array($u->learningSession?->status, ['completed', 'executed'])

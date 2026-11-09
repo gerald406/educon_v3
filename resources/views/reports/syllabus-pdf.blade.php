@@ -295,6 +295,28 @@
                             <td colspan="4" class="text-center">No hay sesiones programadas.</td>
                         </tr>
                     @endforelse
+
+                    {{-- [NUEVO] Semanas 17 y 18: apartado independiente de los indicadores --}}
+                    @if($syllabus->recoveryUnits->isNotEmpty())
+                        <tr>
+                            <td colspan="4" style="background-color: #d1d5db; font-size: 10px; font-weight: bold;">
+                                {{ Str::upper(\App\Models\SyllabusUnit::RECOVERY_SECTION_TITLE) }}
+                            </td>
+                        </tr>
+                        @foreach($syllabus->recoveryUnits as $recoveryUnit)
+                            <tr>
+                                <td class="text-center">{{ $recoveryUnit->session_number }}</td>
+                                <td>
+                                    <strong style="font-size: 11px;">{{ $recoveryUnit->name }}</strong><br>
+                                    <div class="html-content" style="font-size: 10px; color: #333; margin-top: 3px;">
+                                        {{ $recoveryUnit->content }}
+                                    </div>
+                                </td>
+                                <td style="font-size: 10px;">{{ $recoveryUnit->learning_outcome }}</td>
+                                <td style="font-size: 10px;" class="text-center">{{ $recoveryUnit->evaluation_instrument }}</td>
+                            </tr>
+                        @endforeach
+                    @endif
                 </tbody>
             </table>
         </div>

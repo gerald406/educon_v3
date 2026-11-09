@@ -79,6 +79,37 @@ class Syllabus extends Model
         return $this->hasMany(SyllabusIndicator::class)->orderBy('sort_order');
     }
 
+    /**
+     * [NUEVO] Semanas 17 y 18: Reforzamiento y recuperación de capacidades no logradas
+     */
+    public function recoveryUnits()
+    {
+        return $this->hasMany(SyllabusUnit::class)
+            ->where('type', SyllabusUnit::TYPE_RECOVERY)
+            ->orderBy('session_number');
+    }
+
+    /**
+     * [NUEVO] Un sílabo usa la estructura nueva (16 semanas regulares + recuperación)
+     * cuando tiene sus semanas de recuperación. Los sílabos anteriores conservan 18 semanas regulares.
+     */
+    public function usesRecoveryWeeks(): bool
+    {
+        return $this->relationLoaded('recoveryUnits')
+            ? $this->recoveryUnits->isNotEmpty()
+            : $this->recoveryUnits()->exists();
+    }
+
+    /**
+     * [NUEVO] Máximo de semanas regulares que se pueden programar en este sílabo.
+     */
+    public function maxRegularWeeks(): int
+    {
+        return $this->usesRecoveryWeeks()
+            ? SyllabusUnit::MAX_REGULAR_WEEKS
+            : SyllabusUnit::LEGACY_MAX_REGULAR_WEEKS;
+    }
+
     // ============================================
     // MÉTODOS AUXILIARES (OPCIONAL - RECOMENDADO)
     // ============================================

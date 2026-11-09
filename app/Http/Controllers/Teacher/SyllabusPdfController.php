@@ -28,7 +28,8 @@ class SyllabusPdfController extends Controller
             'teacherAssignment.academicPeriod',
             'teacherAssignment.teacher.user',
             'teacherAssignment.shift',
-            'indicators.units' // Cargar indicadores y sus sesiones
+            'indicators.units', // Cargar indicadores y sus sesiones
+            'recoveryUnits',    // [NUEVO] Semanas 17-18 de reforzamiento y recuperación
         ]);
 
         // 3. Generar el PDF usando la vista

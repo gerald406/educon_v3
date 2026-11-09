@@ -103,7 +103,8 @@
             </tr>
             <tr>
                 <td class="label">Indicador de logro vinculado</td>
-                <td colspan="3">{{ $unit->indicator->description }}</td>
+                {{-- [MODIFICADO] Las semanas de recuperación no tienen indicador --}}
+                <td colspan="3">{{ $unit->indicator?->description ?? \App\Models\SyllabusUnit::RECOVERY_SECTION_TITLE }}</td>
             </tr>
             <tr>
                 <td class="label">Competencia transversal priorizada</td>

@@ -6,6 +6,7 @@ use App\Models\Syllabus;
 use App\Models\SyllabusIndicator;
 use App\Models\SyllabusUnit;
 use App\Models\TeacherAssignment;
+use App\Services\SyllabusRecoveryService;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -82,6 +83,10 @@ class SyllabusEditor extends Component
     // --- ESTRUCTURAS COMPLEJAS ---
     public $indicators;
     public $total_weeks_programmed = 0;
+
+    // [NUEVO] Semanas 17 y 18: Reforzamiento y recuperación (vacío en sílabos con la estructura anterior)
+    public $recoveryUnits;
+    public $maxRegularWeeks = SyllabusUnit::LEGACY_MAX_REGULAR_WEEKS;
 
     // ✅ LISTENERS para sincronización con CKEditor
     protected $listeners = [
@@ -192,6 +197,13 @@ class SyllabusEditor extends Component
             ['status' => 'draft', 'version' => '1.0']
         );
 
+        // [NUEVO] Estructura 16 semanas + recuperación (17-18) para sílabos nuevos o del periodo en planificación
+        $this->syllabus->setRelation('teacherAssignment', $this->assignment);
+        $recoveryService = app(SyllabusRecoveryService::class);
+        if ($recoveryService->shouldApply($this->syllabus)) {
+            $recoveryService->ensureFor($this->syllabus);
+        }
+
         $this->loadGeneralData();
 
         // Carga de campos de texto con valores por defecto
@@ -244,7 +256,10 @@ class SyllabusEditor extends Component
         $this->academic_cycle = $unit->semester;
         $start = \Carbon\Carbon::parse($this->assignment->academicPeriod->start_date)->format('d/m/Y');
         $end   = \Carbon\Carbon::parse($this->assignment->academicPeriod->end_date)->format('d/m/Y');
-        $this->date_range = "{$start} – {$end} (18 semanas)";
+        // [MODIFICADO] Semanas según la estructura del sílabo
+        $this->date_range = $this->syllabus->usesRecoveryWeeks()
+            ? "{$start} – {$end} (16 semanas + 2 de recuperación)"
+            : "{$start} – {$end} (18 semanas)";
         $this->shift_name    = $this->assignment->shift->name ?? 'No asignado';
       	$this->teacher_name  = $this->assignment->teacher->user->name . ' ' . $this->assignment->teacher->user->lastname;
     }
@@ -260,6 +275,12 @@ class SyllabusEditor extends Component
             }])
             ->orderBy('sort_order')
             ->get(); // ← SIN ->toArray()
+
+        // [NUEVO] Las semanas de recuperación no pertenecen a un indicador
+        $this->recoveryUnits = $this->syllabus->recoveryUnits()->get();
+        $this->maxRegularWeeks = $this->recoveryUnits->isNotEmpty()
+            ? SyllabusUnit::MAX_REGULAR_WEEKS
+            : SyllabusUnit::LEGACY_MAX_REGULAR_WEEKS;
 
         $this->calculateTotalWeeks();
     }
@@ -288,17 +309,19 @@ class SyllabusEditor extends Component
 
         $nextSessionNumber = $this->total_weeks_programmed + 1;
 
-        if ($nextSessionNumber > 18) {
-            $this->dispatch('swal', ['icon' => 'warning', 'title' => 'Límite alcanzado', 'text' => 'Ya has programado las 18 semanas.']);
+        // [MODIFICADO] 16 semanas regulares (las 17-18 son de recuperación); 18 en sílabos anteriores
+        if ($nextSessionNumber > $this->maxRegularWeeks) {
+            $this->dispatch('swal', ['icon' => 'warning', 'title' => 'Límite alcanzado', 'text' => "Ya has programado las {$this->maxRegularWeeks} semanas regulares."]);
             return;
         }
 
         $indicator->units()->create([
+            'type' => SyllabusUnit::TYPE_REGULAR,
             'session_number' => $nextSessionNumber,
             'name' => 'Nueva Sesión',
             'content' => '',
             'learning_outcome' => '',
-            'evaluation_instrument' => 'Lista de Cotejo',
+            'evaluation_instrument' => SyllabusUnit::DEFAULT_INSTRUMENT,
         ]);
 
         $this->loadIndicatorsWithUnits();
@@ -605,6 +628,11 @@ class SyllabusEditor extends Component
                 throw new \Exception('Acceso denegado');
             }
 
+            // [NUEVO] El instrumento debe ser uno de la lista permitida
+            if ($fieldName === 'evaluation_instrument' && !in_array($value, SyllabusUnit::INSTRUMENTS, true)) {
+                throw new \Exception('Instrumento no válido');
+            }
+
             // 3. Actualizar solo el campo específico
             $unit->update([$fieldName => $value]);
 
@@ -617,6 +645,32 @@ class SyllabusEditor extends Component
                 'text' => 'No se pudo actualizar: ' . $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * [NUEVO] Semanas 17-18 (recuperación): actividad, contenido y logro son fijos;
+     * solo se puede elegir el instrumento de evaluación.
+     */
+    public function updateRecoveryInstrument($unitId, $value)
+    {
+        if (!$this->ensureEditable()) return;
+
+        if (!in_array($value, SyllabusUnit::INSTRUMENTS, true)) {
+            $this->dispatch('swal', ['icon' => 'error', 'title' => 'Error', 'text' => 'Instrumento no válido.']);
+            return;
+        }
+
+        $unit = SyllabusUnit::recovery()
+            ->where('syllabus_id', $this->syllabus->id)
+            ->find($unitId);
+
+        if (!$unit) {
+            $this->dispatch('swal', ['icon' => 'error', 'title' => 'Error', 'text' => 'Acceso denegado.']);
+            return;
+        }
+
+        $unit->update(['evaluation_instrument' => $value]);
+        $this->recoveryUnits = $this->syllabus->recoveryUnits()->get();
     }
 
     /**

@@ -731,9 +731,16 @@
                     <div class="animate-fade-in">
                         <div class="border-b pb-4 mb-6">
                             <h3 class="text-lg font-bold text-gray-800 uppercase tracking-wide">VI. Programación de Sesiones</h3>
-                            <p class="text-sm text-gray-500">Programa las 18 semanas del semestre académico.</p>
+                            {{-- [MODIFICADO] 16 semanas regulares + 2 de recuperación (18 regulares en sílabos anteriores) --}}
+                            <p class="text-sm text-gray-500">
+                                @if($recoveryUnits && $recoveryUnits->isNotEmpty())
+                                    Programa las {{ $maxRegularWeeks }} semanas regulares. Las semanas 17 y 18 corresponden al reforzamiento y recuperación.
+                                @else
+                                    Programa las {{ $maxRegularWeeks }} semanas del semestre académico.
+                                @endif
+                            </p>
                             <div class="mt-2 inline-block px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm font-bold">
-                                Semanas programadas: {{ $total_weeks_programmed }} / 18
+                                Semanas programadas: {{ $total_weeks_programmed }} / {{ $maxRegularWeeks }}
                             </div>
                         </div>
 
@@ -812,13 +819,10 @@
                                                                     wire:change="updateUnitField({{ $unit->id }}, 'evaluation_instrument', $event.target.value)"
                                                                     @disabled(!$this->isEditable())
                                                                     class="w-full border-gray-300 rounded text-xs p-1">
-                                                                    <option value="Lista de Cotejo" {{ $unit->evaluation_instrument == 'Lista de Cotejo' ? 'selected' : '' }}>Lista de Cotejo</option>
-                                                                    <option value="Rúbrica" {{ $unit->evaluation_instrument == 'Rúbrica' ? 'selected' : '' }}>Rúbrica</option>
-                                                                    <option value="Prueba Escrita" {{ $unit->evaluation_instrument == 'Prueba Escrita' ? 'selected' : '' }}>Prueba Escrita</option>
-                                                                    <option value="Guía de Observación" {{ $unit->evaluation_instrument == 'Guía de Observación' ? 'selected' : '' }}>Guía de Observación</option>
-                                                                    <option value="Portafolio" {{ $unit->evaluation_instrument == 'Portafolio' ? 'selected' : '' }}>Portafolio</option>
-                                                                    <option value="Informe" {{ $unit->evaluation_instrument == 'Informe' ? 'selected' : '' }}>Informe</option>
-                                                                    <option value="Otros" {{ $unit->evaluation_instrument == 'Otros' ? 'selected' : '' }}>Otros</option>
+                                                                    {{-- [MODIFICADO] Lista única de instrumentos (SyllabusUnit::INSTRUMENTS) --}}
+                                                                    @foreach(\App\Models\SyllabusUnit::INSTRUMENTS as $instrument)
+                                                                        <option value="{{ $instrument }}" @selected($unit->evaluation_instrument === $instrument)>{{ $instrument }}</option>
+                                                                    @endforeach
                                                                 </select>
                                                             </td>
                                                             <td class="px-2 py-2 text-center">
@@ -844,6 +848,53 @@
                         @else
                             <div class="text-center py-10 bg-gray-50 rounded-lg border-2 border-dashed">
                                 <p class="text-gray-500">Primero debes crear indicadores de logro en el Tab IV</p>
+                            </div>
+                        @endif
+
+                        {{-- [NUEVO] SEMANAS 17 Y 18: REFORZAMIENTO Y RECUPERACIÓN (texto fijo, instrumento seleccionable) --}}
+                        @if($recoveryUnits && $recoveryUnits->isNotEmpty())
+                            <div class="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border border-amber-200">
+                                <div class="mb-3">
+                                    <h4 class="font-bold text-amber-800 text-sm uppercase">
+                                        {{ \App\Models\SyllabusUnit::RECOVERY_SECTION_TITLE }}
+                                    </h4>
+                                    <p class="text-xs text-gray-600 mt-1">
+                                        Apartado institucional común a todos los sílabos. Solo puedes elegir el instrumento de evaluación.
+                                    </p>
+                                </div>
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full bg-white rounded shadow-sm text-xs">
+                                        <thead class="bg-gray-100">
+                                            <tr>
+                                                <th class="px-2 py-2 text-left font-bold">Semana</th>
+                                                <th class="px-2 py-2 text-left font-bold">Actividad</th>
+                                                <th class="px-2 py-2 text-left font-bold">Contenidos</th>
+                                                <th class="px-2 py-2 text-left font-bold">Logro</th>
+                                                <th class="px-2 py-2 text-left font-bold">Instrumento</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            @foreach($recoveryUnits as $recoveryUnit)
+                                                <tr class="border-b" wire:key="recovery-{{ $recoveryUnit->id }}">
+                                                    <td class="px-2 py-2 text-center font-bold text-amber-700">{{ $recoveryUnit->session_number }}</td>
+                                                    <td class="px-2 py-2 text-gray-700">{{ $recoveryUnit->name }}</td>
+                                                    <td class="px-2 py-2 text-gray-700">{{ $recoveryUnit->content }}</td>
+                                                    <td class="px-2 py-2 text-gray-700">{{ $recoveryUnit->learning_outcome }}</td>
+                                                    <td class="px-2 py-2 w-40">
+                                                        <select
+                                                            wire:change="updateRecoveryInstrument({{ $recoveryUnit->id }}, $event.target.value)"
+                                                            @disabled(!$this->isEditable())
+                                                            class="w-full border-gray-300 rounded text-xs p-1">
+                                                            @foreach(\App\Models\SyllabusUnit::INSTRUMENTS as $instrument)
+                                                                <option value="{{ $instrument }}" @selected($recoveryUnit->evaluation_instrument === $instrument)>{{ $instrument }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                    </td>
+                                                </tr>
+                                            @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         @endif
 

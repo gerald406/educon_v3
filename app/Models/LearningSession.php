@@ -83,8 +83,9 @@ class LearningSession extends Model
      */
     public static function unitBelongsToSyllabus(SyllabusUnit $unit, Syllabus $syllabus): bool
     {
-        return SyllabusIndicator::whereKey($unit->syllabus_indicator_id)
-            ->where('syllabus_id', $syllabus->id)
+        // [MODIFICADO] Incluye las semanas de recuperación (cuelgan del sílabo, no de un indicador)
+        return SyllabusUnit::ofSyllabus($syllabus->id)
+            ->whereKey($unit->id)
             ->exists();
     }
 }

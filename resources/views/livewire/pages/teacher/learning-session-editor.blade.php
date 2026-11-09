@@ -90,7 +90,8 @@
                         </div>
                         <div class="md:col-span-2 flex gap-2">
                             <span class="font-semibold text-gray-600 w-48 shrink-0">Indicador de Logro:</span>
-                            <span class="text-gray-900">{{ $unit->indicator->description }}</span>
+                            {{-- [MODIFICADO] Las semanas de recuperación no tienen indicador --}}
+                            <span class="text-gray-900">{{ $unit->indicator?->description ?? \App\Models\SyllabusUnit::RECOVERY_SECTION_TITLE }}</span>
                         </div>
                         <div class="md:col-span-2 flex gap-2">
                             <span class="font-semibold text-gray-600 w-48 shrink-0">Logro de la Sesión:</span>
