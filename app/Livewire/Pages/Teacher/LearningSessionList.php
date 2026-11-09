@@ -41,39 +41,10 @@ class LearningSessionList extends Component
         })->get();
 
         foreach ($units as $unit) {
+            // [MODIFICADO] Plantilla centralizada en el modelo
             LearningSession::firstOrCreate(
                 ['syllabus_unit_id' => $unit->id],
-                [
-                    'status'                 => 'pending',
-                    'activity_type'          => 'teorico-practico',
-                    'transversal_competence' => null,
-                    'sequence_activities'    => [
-                        [
-                            'moment'    => 'inicio',
-                            'label'     => 'Inicio',
-                            'hint'      => 'Motivación, Recojo de saberes previos, Conflicto cognitivo',
-                            'activity'  => '',
-                            'resources' => '',
-                            'time'      => 20,
-                        ],
-                        [
-                            'moment'    => 'desarrollo',
-                            'label'     => 'Desarrollo',
-                            'hint'      => 'Construcción del aprendizaje, Aplicación',
-                            'activity'  => '',
-                            'resources' => '',
-                            'time'      => 60,
-                        ],
-                        [
-                            'moment'    => 'cierre',
-                            'label'     => 'Cierre',
-                            'hint'      => 'Metacognición y evaluación',
-                            'activity'  => '',
-                            'resources' => '',
-                            'time'      => 10,
-                        ],
-                    ],
-                ]
+                LearningSession::defaultAttributes()
             );
         }
     }

@@ -7,6 +7,7 @@ use App\Models\SyllabusIndicator;
 use App\Models\SyllabusUnit;
 use App\Models\TeacherAssignment;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 // AÑADIR junto a los otros use al inicio del archivo
@@ -25,6 +26,30 @@ class SyllabusEditor extends Component
     public function isEditable(): bool
     {
         return in_array($this->syllabus->status, ['draft', 'observed']);
+    }
+
+    /**
+     * [NUEVO] Guardián del lado del servidor para toda acción que modifica el sílabo.
+     * Lee el estado desde la BD (puede haber cambiado: enviado, aprobado por el coordinador...)
+     * porque ocultar los botones en la vista no impide invocar los métodos.
+     */
+    protected function ensureEditable(): bool
+    {
+        $currentStatus = Syllabus::whereKey($this->syllabus->id)->value('status');
+        $this->syllabus->status = $currentStatus;
+        $this->syllabus->syncOriginalAttribute('status');
+
+        if (in_array($currentStatus, ['draft', 'observed'])) {
+            return true;
+        }
+
+        $this->dispatch('swal', [
+            'icon' => 'warning',
+            'title' => 'Sílabo bloqueado',
+            'text' => 'Este sílabo ya fue enviado o aprobado y no puede modificarse.'
+        ]);
+
+        return false;
     }
 
     // --- DATOS GENERALES ---
@@ -79,19 +104,7 @@ class SyllabusEditor extends Component
         'indicators.*.units.*.content' => 'nullable|string',
         'indicators.*.units.*.learning_outcome' => 'nullable|string',
         'indicators.*.units.*.evaluation_instrument' => 'nullable|string',
-        'teacher_email' => 'required|email',
-        'teacher_name' => 'required|string|max:200',
-        'study_program' => 'required|string|max:150',
-        'study_plan' => 'required|string|max:100',
-        'module_name' => 'required|string|max:150',
-        'course_name' => 'required|string|max:200',
-        'credits_info' => 'nullable|string|max:50',
-        'total_hours' => 'nullable|integer|min:1',
-        'weekly_hours_info' => 'nullable|string|max:50',
-        'period_name' => 'nullable|string|max:100',
-        'academic_cycle' => 'nullable|integer|min:1|max:6',
-        'date_range' => 'nullable|string|max:100',
-        'shift_name' => 'nullable|string|max:100',
+        // [MODIFICADO] Los datos generales (Tab I) son de solo lectura: ya no se validan ni guardan aquí
         'sumilla' => 'nullable',
         'unit_competence' => 'nullable',
         'course_capacity' => 'nullable',
@@ -267,7 +280,10 @@ class SyllabusEditor extends Component
 
     public function addSession($indicatorId)
     {
-        $indicator = SyllabusIndicator::find($indicatorId);
+        if (!$this->ensureEditable()) return;
+
+        // [CORREGIDO] Solo indicadores de este sílabo
+        $indicator = SyllabusIndicator::where('syllabus_id', $this->syllabus->id)->find($indicatorId);
         if (!$indicator) return;
 
         $nextSessionNumber = $this->total_weeks_programmed + 1;
@@ -288,13 +304,33 @@ class SyllabusEditor extends Component
         $this->loadIndicatorsWithUnits();
     }
 
-    // DESPUÉS
-    public function removeSession($unitId)
+    /**
+     * [NUEVO] Pide confirmación antes de eliminar una semana (borra también su sesión de aprendizaje).
+     */
+    public function confirmRemoveSession($unitId)
     {
+        if (!$this->ensureEditable()) return;
+
+        $this->dispatch('swal:confirm', [
+            'title' => '¿Eliminar esta sesión?',
+            'text' => 'Se eliminará la semana programada y su sesión de aprendizaje, si existe.',
+            'icon' => 'warning',
+            'confirmButtonText' => 'Sí, eliminar',
+            'id' => $unitId,
+            'onConfirmed' => 'removeSession',
+        ]);
+    }
+
+    // [MODIFICADO] Se ejecuta tras la confirmación (SweetAlert)
+    #[On('removeSession')]
+    public function removeSession($id)
+    {
+        if (!$this->ensureEditable()) return;
+
         // Verificar que la sesión pertenece al sílabo del docente autenticado
         $unit = SyllabusUnit::whereHas('indicator', function ($q) {
             $q->where('syllabus_id', $this->syllabus->id);
-        })->find($unitId);
+        })->find($id);
 
         if (!$unit) {
             $this->dispatch('swal', [
@@ -325,79 +361,17 @@ class SyllabusEditor extends Component
     // MÉTODOS DE GUARDADO
     // ========================================
 
-    // DESPUÉS
-    public function saveGeneral()
-    {
-        $this->validate([
-            'teacher_email' => 'required|email',
-            'teacher_name'  => 'required|string|max:200',
-        ]);
-
-        try {
-            // 1. Actualizar datos del usuario (email y nombre del docente)
-            $nameParts = explode(' ', trim($this->teacher_name), 2);
-            $this->assignment->teacher->user->update([
-                'name'     => $nameParts[0] ?? $this->teacher_name,
-                'lastname' => $nameParts[1] ?? '',
-                'email'    => $this->teacher_email,
-            ]);
-
-            // 2. Actualizar datos de la unidad didáctica
-            $this->assignment->didacticUnit->update([
-                'name'         => $this->course_name,
-                'total_hours'  => $this->total_hours,
-                'credits'      => (int) filter_var($this->credits_info, FILTER_SANITIZE_NUMBER_INT),
-                'semester'     => $this->academic_cycle,
-            ]);
-
-            // 3. Actualizar nombre del módulo
-            $this->assignment->didacticUnit->module->update([
-                'name' => $this->module_name,
-            ]);
-
-            // 4. Actualizar nombre del plan de estudios
-            $this->assignment->didacticUnit->module->studyPlan->update([
-                'name' => $this->study_plan,
-            ]);
-
-            // 5. Actualizar nombre de la carrera
-            $this->assignment->didacticUnit->module->studyPlan->career->update([
-                'name' => $this->study_program,
-            ]);
-
-            // 6. Actualizar turno
-            $this->assignment->shift->update([
-                'name' => $this->shift_name,
-            ]);
-
-            // 7. Recargar datos generales para reflejar cambios
-            $this->assignment->refresh()->load([
-                'didacticUnit.module.studyPlan.career',
-                'academicPeriod',
-                'teacher.user',
-                'shift'
-            ]);
-            $this->loadGeneralData();
-
-            $this->dispatch('swal', [
-                'icon' => 'success',
-                'title' => 'Guardado',
-                'text' => 'Datos generales actualizados correctamente.'
-            ]);
-        } catch (\Exception $e) {
-            $this->dispatch('swal', [
-                'icon' => 'error',
-                'title' => 'Error',
-                'text' => 'No se pudo actualizar: ' . $e->getMessage()
-            ]);
-        }
-    }
+    // [CORREGIDO] Se eliminó saveGeneral(): modificaba datos maestros compartidos
+    // (carrera, plan, módulo, unidad didáctica, turno y usuario del docente) desde un sílabo.
+    // Los datos generales se muestran en solo lectura y se corrigen en sus propios módulos.
 
     /**
      * ✅ Guardar Sumilla
      */
     public function saveSumilla()
     {
+        if (!$this->ensureEditable()) return; // [CORREGIDO] validar estado en el servidor
+
         try {
             $this->syllabus->update(['sumilla' => $this->sumilla]);
             // $this->syllabus->refresh();
@@ -421,6 +395,8 @@ class SyllabusEditor extends Component
      */
     public function saveCompetencies()
     {
+        if (!$this->ensureEditable()) return; // [CORREGIDO] validar estado en el servidor
+
         try {
             $this->syllabus->update(['unit_competence' => $this->unit_competence]);
             // $this->syllabus->refresh();
@@ -442,6 +418,8 @@ class SyllabusEditor extends Component
     // TAB IV
     public function addIndicator()
     {
+        if (!$this->ensureEditable()) return; // [CORREGIDO] validar estado en el servidor
+
         $newIndicator = $this->syllabus->indicators()->create([
             'description' => 'Nuevo indicador',
             'sort_order' => $this->indicators->count() + 1
@@ -450,9 +428,30 @@ class SyllabusEditor extends Component
         $this->loadIndicatorsWithUnits();
     }
 
-    // DESPUÉS
+    /**
+     * [NUEVO] Pide confirmación antes de eliminar un indicador
+     * (en BD borra en cascada sus semanas programadas y sesiones de aprendizaje).
+     */
+    public function confirmRemoveIndicator($id)
+    {
+        if (!$this->ensureEditable()) return;
+
+        $this->dispatch('swal:confirm', [
+            'title' => '¿Eliminar este indicador?',
+            'text' => 'También se eliminarán todas sus sesiones programadas y sesiones de aprendizaje.',
+            'icon' => 'warning',
+            'confirmButtonText' => 'Sí, eliminar',
+            'id' => $id,
+            'onConfirmed' => 'removeIndicator',
+        ]);
+    }
+
+    // [MODIFICADO] Se ejecuta tras la confirmación (SweetAlert)
+    #[On('removeIndicator')]
     public function removeIndicator($id)
     {
+        if (!$this->ensureEditable()) return;
+
         // Verificar que el indicador pertenece al sílabo del docente autenticado
         $indicator = SyllabusIndicator::where('syllabus_id', $this->syllabus->id)
             ->find($id);
@@ -475,6 +474,8 @@ class SyllabusEditor extends Component
      */
     public function saveCapacityAndIndicators()
     {
+        if (!$this->ensureEditable()) return; // [CORREGIDO] validar estado en el servidor
+
         try {
             // 1. Guardar la capacidad del curso
             $this->syllabus->update(['course_capacity' => $this->course_capacity]);
@@ -507,6 +508,8 @@ class SyllabusEditor extends Component
 
     public function saveEmployability()
     {
+        if (!$this->ensureEditable()) return; // [CORREGIDO] validar estado en el servidor
+
         try {
             $this->syllabus->update([
                 'employability_competencies' => [$this->employability_content]
@@ -533,6 +536,8 @@ class SyllabusEditor extends Component
     // DESPUÉS
     public function saveProgramming()
     {
+        if (!$this->ensureEditable()) return; // [CORREGIDO] validar estado en el servidor
+
         try {
             DB::transaction(function () {
                 foreach ($this->indicators as $indicator) {
@@ -581,6 +586,8 @@ class SyllabusEditor extends Component
     // DESPUÉS
     public function updateUnitField($unitId, $fieldName, $value)
     {
+        if (!$this->ensureEditable()) return; // [CORREGIDO] validar estado en el servidor
+
         try {
             // 1. Validar campo permitido
             $allowedFields = ['name', 'content', 'learning_outcome', 'evaluation_instrument'];
@@ -618,6 +625,8 @@ class SyllabusEditor extends Component
     // DESPUÉS
     public function updateIndicatorDescription($indicatorId, $description)
     {
+        if (!$this->ensureEditable()) return; // [CORREGIDO] validar estado en el servidor
+
         try {
             // Verificar que el indicador pertenece al sílabo del docente autenticado
             $indicator = SyllabusIndicator::where('syllabus_id', $this->syllabus->id)
@@ -642,6 +651,8 @@ class SyllabusEditor extends Component
 
     public function saveMethodology()
     {
+        if (!$this->ensureEditable()) return; // [CORREGIDO] validar estado en el servidor
+
         try {
             $this->syllabus->update(['methodology' => $this->methodology]);
             // $this->syllabus->refresh();
@@ -662,6 +673,8 @@ class SyllabusEditor extends Component
 
     public function saveResources()
     {
+        if (!$this->ensureEditable()) return; // [CORREGIDO] validar estado en el servidor
+
         try {
             $this->syllabus->update([
                 'environments' => $this->environments,
@@ -685,6 +698,8 @@ class SyllabusEditor extends Component
 
     public function saveEvaluation()
     {
+        if (!$this->ensureEditable()) return; // [CORREGIDO] validar estado en el servidor
+
         try {
             $this->syllabus->update(['evaluation_system' => $this->evaluation_system]);
             // $this->syllabus->refresh();
@@ -705,6 +720,8 @@ class SyllabusEditor extends Component
 
     public function saveSources()
     {
+        if (!$this->ensureEditable()) return; // [CORREGIDO] validar estado en el servidor
+
         try {
             $this->syllabus->update([
                 'bibliography' => $this->bibliography,
@@ -760,6 +777,12 @@ class SyllabusEditor extends Component
 
     public function submitSyllabus()
     {
+        // [CORREGIDO] validar estado en el servidor (y cerrar el modal si ya no es editable)
+        if (!$this->ensureEditable()) {
+            $this->confirmingSubmission = false;
+            return;
+        }
+
         $this->syllabus->update([
             'status' => 'submitted',
             'submitted_at' => now()

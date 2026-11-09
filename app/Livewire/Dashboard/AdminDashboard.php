@@ -47,7 +47,8 @@ class AdminDashboard extends Component
         // --- Cargar KPIs del Periodo Activo ---
         if ($this->activePeriod) {
             // 5. Sílabos Pendientes
-            $this->pendingSyllabi = Syllabus::where('status', 'pending_approval')
+            // [CORREGIDO] 'pending_approval' ya no existe: el estado de envío es 'submitted'
+            $this->pendingSyllabi = Syllabus::where('status', 'submitted')
                 ->whereHas('teacherAssignment', fn($q) => $q->where('academic_period_id', $this->activePeriod->id))
                 ->count();
                 

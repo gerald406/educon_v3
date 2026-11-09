@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Teacher;
 
 use App\Http\Controllers\Controller;
+use App\Models\LearningSession;
 use App\Models\Syllabus;
 use App\Models\SyllabusUnit;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -18,6 +19,11 @@ class LearningSessionPdfController extends Controller
 
         if (!$teacher || $syllabus->teacherAssignment->teacher_id !== $teacher->id) {
             abort(403, 'No tienes permiso para ver esta sesión.');
+        }
+
+        // [CORREGIDO] La unidad debe pertenecer al sílabo de la URL
+        if (!LearningSession::unitBelongsToSyllabus($unit, $syllabus)) {
+            abort(404);
         }
 
         // Cargar todas las relaciones necesarias para el PDF

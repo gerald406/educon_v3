@@ -32,4 +32,59 @@ class LearningSession extends Model
     {
         return $this->belongsTo(SyllabusUnit::class);
     }
+
+    /**
+     * [NUEVO] Valores iniciales de una sesión recién generada
+     * (plantilla de secuencia didáctica: inicio, desarrollo y cierre).
+     */
+    public static function defaultAttributes(): array
+    {
+        return [
+            'status'                 => 'pending',
+            'activity_type'          => 'teorico-practico',
+            'transversal_competence' => null,
+            'sequence_activities'    => self::defaultSequence(),
+        ];
+    }
+
+    public static function defaultSequence(): array
+    {
+        return [
+            [
+                'moment'    => 'inicio',
+                'label'     => 'Inicio',
+                'hint'      => 'Motivación, Recojo de saberes previos, Conflicto cognitivo',
+                'activity'  => '',
+                'resources' => '',
+                'time'      => 20,
+            ],
+            [
+                'moment'    => 'desarrollo',
+                'label'     => 'Desarrollo',
+                'hint'      => 'Construcción del aprendizaje, Aplicación',
+                'activity'  => '',
+                'resources' => '',
+                'time'      => 60,
+            ],
+            [
+                'moment'    => 'cierre',
+                'label'     => 'Cierre',
+                'hint'      => 'Metacognición y evaluación',
+                'activity'  => '',
+                'resources' => '',
+                'time'      => 10,
+            ],
+        ];
+    }
+
+    /**
+     * [NUEVO] Indica si la unidad (semana) pertenece al sílabo dado.
+     * Evita que se acceda a sesiones de otro sílabo cambiando el id en la URL.
+     */
+    public static function unitBelongsToSyllabus(SyllabusUnit $unit, Syllabus $syllabus): bool
+    {
+        return SyllabusIndicator::whereKey($unit->syllabus_indicator_id)
+            ->where('syllabus_id', $syllabus->id)
+            ->exists();
+    }
 }

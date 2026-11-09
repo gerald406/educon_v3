@@ -219,12 +219,14 @@
                         <div class="border-b pb-4 mb-6">
                             <h3 class="text-lg font-bold text-gray-800 uppercase tracking-wide">I. Datos Generales</h3>
                             <p class="text-sm text-gray-500">
-                                <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-bold mr-2">EDITABLE</span>
-                                Puedes ajustar los datos generales del sílabo si es necesario.
+                                {{-- [MODIFICADO] Datos tomados del sistema académico: solo lectura --}}
+                                <span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-bold mr-2">SOLO LECTURA</span>
+                                Datos cargados automáticamente desde la carga académica.
                             </p>
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-2">
+                        {{-- [CORREGIDO] fieldset disabled: ningún dato maestro se edita desde el sílabo --}}
+                        <fieldset disabled class="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-2">
 
                             {{-- 1.1 Programa de estudios --}}
                             <div class="md:col-span-2">
@@ -385,26 +387,14 @@
                                 @enderror
                             </div>
 
-                        </div>
+                        </fieldset>
 
                         {{-- AVISO INFORMATIVO --}}
                         <div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
                             <p class="text-xs text-amber-700">
-                                <strong>⚠️ Nota:</strong> Los cambios en este apartado actualizarán los datos en el sistema académico.
-                                Modifica solo si hay un error en la información cargada automáticamente.
+                                <strong>⚠️ Nota:</strong> Si algún dato es incorrecto (programa, plan, módulo, unidad didáctica,
+                                horas, turno o datos del docente), solicita la corrección a Secretaría Académica.
                             </p>
-                        </div>
-
-                        {{-- BOTÓN GUARDAR --}}
-                        <div class="flex justify-end pt-6 border-t mt-6">
-                            @if($this->isEditable())
-                                <x-button wire:click="saveGeneral" class="bg-indigo-600 hover:bg-indigo-700">
-                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-                                    </svg>
-                                    Guardar Datos Generales
-                                </x-button>
-                            @endif
                         </div>
                     </div>
                 @endif
@@ -631,16 +621,20 @@
                                         <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
                                             <div class="flex justify-between items-start mb-2">
                                                 <span class="text-sm font-bold text-indigo-600">Indicador {{ $index + 1 }}</span>
-                                                <button 
-                                                    wire:click="removeIndicator({{ $indicator->id }})" 
-                                                    class="text-red-500 hover:text-red-700 text-xs">
-                                                    Eliminar
-                                                </button>
+                                                {{-- [CORREGIDO] Solo si es editable y con confirmación (borra en cascada) --}}
+                                                @if($this->isEditable())
+                                                    <button 
+                                                        wire:click="confirmRemoveIndicator({{ $indicator->id }})" 
+                                                        class="text-red-500 hover:text-red-700 text-xs">
+                                                        Eliminar
+                                                    </button>
+                                                @endif
                                             </div>
                                             {{-- ✅ CORREGIDO: Actualizar en tiempo real al perder foco --}}
                                             <textarea 
                                                 value="{{ $indicator->description }}"
                                                 wire:change="updateIndicatorDescription({{ $indicator->id }}, $event.target.value)"
+                                                @disabled(!$this->isEditable())
                                                 class="w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm text-sm"
                                                 rows="2"
                                                 placeholder="Describe el indicador de logro...">{{ $indicator->description }}</textarea>
@@ -789,6 +783,7 @@
                                                                     type="text" 
                                                                     value="{{ $unit->name }}"
                                                                     wire:change="updateUnitField({{ $unit->id }}, 'name', $event.target.value)"
+                                                                    @disabled(!$this->isEditable())
                                                                     class="w-full border-gray-300 rounded text-xs p-1"
                                                                     placeholder="Nombre de la sesión">
                                                             </td>
@@ -796,6 +791,7 @@
                                                                 {{-- ✅ CORREGIDO: Actualización directa al perder foco --}}
                                                                 <textarea 
                                                                     wire:change="updateUnitField({{ $unit->id }}, 'content', $event.target.value)"
+                                                                    @disabled(!$this->isEditable())
                                                                     class="w-full border-gray-300 rounded text-xs p-1" 
                                                                     rows="2"
                                                                     placeholder="Contenidos básicos">{{ $unit->content }}</textarea>
@@ -804,6 +800,7 @@
                                                                 {{-- ✅ CORREGIDO: Actualización directa al perder foco --}}
                                                                 <textarea 
                                                                     wire:change="updateUnitField({{ $unit->id }}, 'learning_outcome', $event.target.value)"
+                                                                    @disabled(!$this->isEditable())
                                                                     class="w-full border-gray-300 rounded text-xs p-1" 
                                                                     rows="2"
                                                                     placeholder="Logro esperado">{{ $unit->learning_outcome }}</textarea>
@@ -813,6 +810,7 @@
                                                                 {{-- DESPUÉS --}}
                                                                 <select 
                                                                     wire:change="updateUnitField({{ $unit->id }}, 'evaluation_instrument', $event.target.value)"
+                                                                    @disabled(!$this->isEditable())
                                                                     class="w-full border-gray-300 rounded text-xs p-1">
                                                                     <option value="Lista de Cotejo" {{ $unit->evaluation_instrument == 'Lista de Cotejo' ? 'selected' : '' }}>Lista de Cotejo</option>
                                                                     <option value="Rúbrica" {{ $unit->evaluation_instrument == 'Rúbrica' ? 'selected' : '' }}>Rúbrica</option>
@@ -827,7 +825,7 @@
                                                                 {{-- BOTÓN ELIMINAR sesión - DESPUÉS --}}
                                                                 @if($this->isEditable())
                                                                     <button 
-                                                                        wire:click="removeSession({{ $unit->id }})" 
+                                                                        wire:click="confirmRemoveSession({{ $unit->id }})" 
                                                                         class="text-red-500 hover:text-red-700">
                                                                         🗑️
                                                                     </button>

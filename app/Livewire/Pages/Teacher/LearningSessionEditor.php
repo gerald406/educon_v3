@@ -39,6 +39,16 @@ class LearningSessionEditor extends Component
             abort(403, 'No tienes permiso para editar esta sesión.');
         }
 
+        // [CORREGIDO] La unidad debe pertenecer al sílabo de la URL
+        if (!LearningSession::unitBelongsToSyllabus($unit, $syllabus)) {
+            abort(404);
+        }
+
+        // [CORREGIDO] Igual que el listado: solo sílabos aprobados
+        if ($syllabus->status !== 'approved') {
+            abort(403, 'Solo puedes gestionar sesiones de sílabos aprobados.');
+        }
+
         // Cargar todas las relaciones necesarias para la vista
         $syllabus->load([
             'teacherAssignment.didacticUnit.module.studyPlan.career',
@@ -51,7 +61,12 @@ class LearningSessionEditor extends Component
 
         $this->syllabus = $syllabus;
         $this->unit     = $unit;
-        $this->session  = $unit->learningSession;
+        // [CORREGIDO] Si se entra directo sin pasar por el listado, la sesión puede no existir aún
+        $this->session  = $unit->learningSession
+            ?? LearningSession::firstOrCreate(
+                ['syllabus_unit_id' => $unit->id],
+                LearningSession::defaultAttributes()
+            );
 
         // Hidratar campos del formulario desde la sesión existente
         $this->transversal_competence = $this->session->transversal_competence ?? '';
@@ -65,40 +80,20 @@ class LearningSessionEditor extends Component
         $this->week_range = $this->unit->week_range ?? '';
 
         // Hidratar secuencia didáctica
-        $this->sequence_activities = $this->session->sequence_activities ?? [
-            [
-                'moment'    => 'inicio',
-                'label'     => 'Inicio',
-                'hint'      => 'Motivación, Recojo de saberes previos, Conflicto cognitivo',
-                'activity'  => '',
-                'resources' => '',
-                'time'      => 20,
-            ],
-            [
-                'moment'    => 'desarrollo',
-                'label'     => 'Desarrollo',
-                'hint'      => 'Construcción del aprendizaje, Aplicación',
-                'activity'  => '',
-                'resources' => '',
-                'time'      => 60,
-            ],
-            [
-                'moment'    => 'cierre',
-                'label'     => 'Cierre',
-                'hint'      => 'Metacognición y evaluación',
-                'activity'  => '',
-                'resources' => '',
-                'time'      => 10,
-            ],
-        ];
+        $this->sequence_activities = $this->session->sequence_activities ?? LearningSession::defaultSequence();
     }
 
     // ============================================
     // GUARDAR
     // ============================================
 
-    public function save(string $newStatus = null)
+    public function save(?string $newStatus = null)
     {
+        // [CORREGIDO] save() es invocable desde el cliente: solo estados válidos
+        if ($newStatus !== null && !in_array($newStatus, ['pending', 'completed', 'executed'], true)) {
+            return;
+        }
+
         $this->validate([
             'activity_type'                   => 'required|in:teorico,practico,teorico-practico',
             'transversal_competence'          => 'nullable|string|max:255',

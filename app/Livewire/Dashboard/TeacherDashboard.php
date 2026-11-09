@@ -32,8 +32,10 @@ class TeacherDashboard extends Component
                 ->get();
                 
             // Contar sílabos pendientes
+            // [CORREGIDO] 'pending_approval' ya no existe; se cuentan los no aprobados:
+            // sin sílabo, borrador, enviado (en revisión) u observado
             $this->pendingSyllabiCount = $this->assignments->filter(function($assignment) {
-                return $assignment->syllabus?->status == 'pending_approval' || $assignment->syllabus?->status == 'observed' || !$assignment->syllabus;
+                return in_array($assignment->syllabus?->status, [null, 'draft', 'submitted', 'observed'], true);
             })->count();
             
             // Calcular horas totales (usando la lógica corregida)
