@@ -85,6 +85,11 @@ class TeacherAssignmentManager extends Component
 
     public function updatedSearchUnit($value)
     {
+        // [CORREGIDO] Al escribir otro curso se descarta el seleccionado: antes se guardaba
+        // con el curso anterior y la asignación quedaba sobrescrita sin aviso.
+        $this->didactic_unit_id = '';
+        $this->selectedUnitName = '';
+
         if (strlen($value) < 2) {
             $this->unitResults = [];
             return;
@@ -104,12 +109,20 @@ class TeacherAssignmentManager extends Component
         $this->unitResults = $query->take(10)->get();
     }
 
-    public function selectUnit($id, $name, $module, $plan)
+    // [MODIFICADO] Recibe solo el id: los datos se leen de la BD (los nombres con apóstrofo rompían el wire:click)
+    public function selectUnit($id)
     {
-        $this->didactic_unit_id = $id;
-        $this->searchUnit = $name; // Texto visual
-        $this->selectedUnitName = "$name ($module - $plan)"; // Detalle visual (opcional)
+        $unit = DidacticUnit::with('module.studyPlan')->find($id);
         $this->unitResults = [];
+
+        if (!$unit) {
+            $this->didactic_unit_id = '';
+            return;
+        }
+
+        $this->didactic_unit_id = $unit->id;
+        $this->searchUnit = $unit->name; // Texto visual
+        $this->selectedUnitName = "{$unit->name} (" . ($unit->module->name ?? 'M?') . ' - ' . ($unit->module->studyPlan->code ?? '?') . ')';
     }
 
     private function resetUnitSearch()
@@ -123,6 +136,9 @@ class TeacherAssignmentManager extends Component
     // 2. Buscador de Docentes
     public function updatedSearchTeacher($value)
     {
+        // [CORREGIDO] Al escribir otro docente se descarta el seleccionado (mismo problema que el curso)
+        $this->teacher_id = '';
+
         if (strlen($value) < 2) {
             $this->teacherResults = [];
             return;
@@ -139,11 +155,19 @@ class TeacherAssignmentManager extends Component
             ->get();
     }
 
-    public function selectTeacher($id, $name)
+    // [MODIFICADO] Recibe solo el id (mismo motivo que selectUnit)
+    public function selectTeacher($id)
     {
-        $this->teacher_id = $id;
-        $this->searchTeacher = $name;
+        $teacher = Teacher::with('user')->where('status', 'active')->find($id);
         $this->teacherResults = [];
+
+        if (!$teacher) {
+            $this->teacher_id = '';
+            return;
+        }
+
+        $this->teacher_id = $teacher->id;
+        $this->searchTeacher = trim($teacher->user->name . ' ' . $teacher->user->lastname);
     }
 
     // ==========================================
@@ -223,6 +247,8 @@ class TeacherAssignmentManager extends Component
             $msg = 'Carga asignada correctamente.';
         }
 
+        // [CORREGIDO] Limpiar el formulario: la asignación editada no debe quedar como "en edición"
+        $this->resetInput();
         $this->isModalOpen = false;
         $this->dispatch('swal', ['icon' => 'success', 'title' => 'Éxito', 'text' => $msg]);
     }
@@ -243,6 +269,8 @@ class TeacherAssignmentManager extends Component
     #[On('deleteAssignment')]
     public function deleteAssignment($id)
     {
+        $this->authorize('gestionar-carga-academica'); // [NUEVO] faltaba en la acción que elimina
+
         try {
             TeacherAssignment::findOrFail($id)->delete();
             $this->dispatch('swal', ['icon' => 'success', 'title' => 'Eliminado', 'text' => 'Registro eliminado.']);

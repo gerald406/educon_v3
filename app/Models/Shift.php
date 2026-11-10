@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\TimeCast;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -21,8 +22,9 @@ class Shift extends Model
     /**
      * Define los casts para las horas.
      */
+    // [CORREGIDO] ShiftManager usa ->format('H:i'): con 'string' fallaba
     protected $casts = [
-        'start_time' => 'string',
-        'end_time' => 'string',
+        'start_time' => TimeCast::class,
+        'end_time' => TimeCast::class,
     ];
 }

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Pages\AcademicProcess\Schedules;
 
+use App\Casts\TimeCast;
 use App\Models\AcademicPeriod;
 use App\Models\Career;
 use App\Models\ClassroomResource;
@@ -10,6 +11,7 @@ use App\Models\Schedule;
 use App\Models\Shift;
 use App\Models\Teacher;
 use App\Models\TeacherAssignment;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Computed;
@@ -18,6 +20,11 @@ use Livewire\Component;
 #[Layout('layouts.app')]
 class ScheduleManager extends Component
 {
+    use AuthorizesRequests; // [NUEVO]
+
+    // [NUEVO] Días programables (orden de la grilla)
+    private const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
     // ==========================================
     // PROPIEDADES - GESTIÓN DE HORARIOS
     // ==========================================
@@ -38,6 +45,7 @@ class ScheduleManager extends Component
     public $day_of_week = 'monday';
     public $start_time = '';
     public $end_time = '';
+    public $editingScheduleId = null; // [NUEVO] Bloque en edición
 
     // Colecciones
     public Collection $careers;
@@ -108,6 +116,11 @@ class ScheduleManager extends Component
 
     public function updatedSearchUnit($value)
     {
+        // [CORREGIDO] Al escribir otro curso se descarta la selección anterior.
+        // Antes el curso/sección previos seguían seleccionados y los bloques
+        // se registraban (o eliminaban) en la sección equivocada.
+        $this->clearSelection();
+
         if (strlen($value) < 2 || !$this->selectedCareerId) {
             $this->unitResults = [];
             return;
@@ -124,33 +137,63 @@ class ScheduleManager extends Component
             ->get();
     }
 
-    public function selectUnit($id, $name, $semester)
+    // [MODIFICADO] Recibe solo el id: el nombre se lee de la BD (los nombres con apóstrofo rompían el wire:click)
+    public function selectUnit($id)
     {
-        $this->selectedUnitId = $id;
-        $this->searchUnit = $name;
-        $this->selectedUnitName = "Semestre $semester - $name";
+        $unit = DidacticUnit::whereHas(
+            'module.studyPlan',
+            fn($q) => $q->where('career_id', $this->selectedCareerId)
+        )->find($id);
+
+        $this->clearSelection();
         $this->unitResults = [];
+
+        if (!$unit) {
+            $this->searchUnit = '';
+            return;
+        }
+
+        $this->selectedUnitId = $unit->id;
+        $this->searchUnit = $unit->name;
+        $this->selectedUnitName = "Semestre {$unit->semester} - {$unit->name}";
         $this->loadAssignments();
     }
 
     private function resetUnitSearch()
     {
-        $this->selectedUnitId = '';
         $this->searchUnit = '';
-        $this->selectedUnitName = '';
         $this->unitResults = [];
+        $this->clearSelection();
+    }
+
+    /**
+     * [NUEVO] Limpia curso, sección, bloques cargados y el formulario.
+     */
+    private function clearSelection(): void
+    {
+        $this->selectedUnitId = '';
+        $this->selectedUnitName = '';
         $this->selectedAssignmentId = '';
         $this->selectedAssignment = null;
+        $this->sectionAssignments = collect();
         $this->currentSchedules = collect();
+        $this->resetBlockForm();
     }
 
     public function loadAssignments()
     {
+        // [CORREGIDO] Siempre se parte de cero: la sección del curso anterior no debe quedar seleccionada
+        $this->selectedAssignmentId = '';
+        $this->selectedAssignment = null;
+        $this->sectionAssignments = collect();
+        $this->currentSchedules = collect();
+
         if ($this->selectedUnitId && $this->activePeriod) {
             $this->sectionAssignments = TeacherAssignment::with(['teacher.user', 'shift'])
                 ->where('academic_period_id', $this->activePeriod->id)
                 ->where('didactic_unit_id', $this->selectedUnitId)
                 ->where('status', 'active')
+                ->orderBy('section')
                 ->get();
 
             if ($this->sectionAssignments->count() === 1) {
@@ -162,24 +205,54 @@ class ScheduleManager extends Component
 
     public function updatedSelectedAssignmentId($value)
     {
-        if ($value) {
-            $this->selectedAssignment = TeacherAssignment::with(['teacher', 'didacticUnit'])->find($value);
+        $this->resetBlockForm();
+        $this->selectedAssignment = $value ? $this->findSelectableAssignment($value) : null;
+
+        if ($this->selectedAssignment) {
             $this->loadSchedules();
         } else {
-            $this->selectedAssignment = null;
+            $this->selectedAssignmentId = '';
             $this->currentSchedules = collect();
         }
+    }
+
+    /**
+     * [NUEVO] La sección debe ser del curso seleccionado y del periodo activo.
+     */
+    private function findSelectableAssignment($id): ?TeacherAssignment
+    {
+        if (!$this->activePeriod || !$this->selectedUnitId) {
+            return null;
+        }
+
+        return TeacherAssignment::with(['teacher.user', 'didacticUnit.module.studyPlan', 'shift'])
+            ->where('academic_period_id', $this->activePeriod->id)
+            ->where('didactic_unit_id', $this->selectedUnitId)
+            ->where('status', 'active')
+            ->find($id);
     }
 
     public function loadSchedules()
     {
         if ($this->selectedAssignment) {
+            // [MODIFICADO] Orden por día en PHP (FIELD() es exclusivo de MySQL)
             $this->currentSchedules = $this->selectedAssignment->schedules()
                 ->with('classroomResource')
-                ->orderByRaw("FIELD(day_of_week, 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday')")
-                ->orderBy('start_time')
-                ->get();
+                ->get()
+                ->sortBy(fn ($s) => sprintf('%d-%s', array_search($s->day_of_week, self::DAYS, true), $s->start_time->format('H:i')))
+                ->values();
         }
+    }
+
+    /**
+     * [NUEVO] Horas semanales ya programadas para la sección (para comparar con las de la UD).
+     */
+    #[Computed]
+    public function scheduledHours(): float
+    {
+        return round($this->currentSchedules->sum(
+            fn ($s) => $s->start_time->diffInMinutes($s->end_time)
+        ) / 60, 2);
     }
 
     public function setPresetTime($range)
@@ -193,104 +266,199 @@ class ScheduleManager extends Component
         }
     }
 
+    // ==========================================
+    // [NUEVO] EDICIÓN DE BLOQUES
+    // ==========================================
+
+    /**
+     * Carga un bloque existente en el formulario para modificarlo
+     * (antes solo se podía eliminar y volver a crear).
+     */
+    public function editSchedule($id)
+    {
+        $schedule = $this->currentSchedules->firstWhere('id', (int) $id);
+        if (!$schedule) {
+            return;
+        }
+
+        $this->editingScheduleId = $schedule->id;
+        $this->day_of_week = $schedule->day_of_week;
+        $this->start_time = $schedule->start_time->format('H:i');
+        $this->end_time = $schedule->end_time->format('H:i');
+        $this->classroom_resource_id = $schedule->classroom_resource_id ?? '';
+        $this->resetValidation();
+    }
+
+    public function cancelEdit()
+    {
+        $this->resetBlockForm();
+    }
+
+    private function resetBlockForm(): void
+    {
+        $this->editingScheduleId = null;
+        $this->day_of_week = 'monday';
+        $this->start_time = '';
+        $this->end_time = '';
+        $this->classroom_resource_id = '';
+        $this->resetValidation();
+    }
+
+    // ==========================================
+    // REGISTRO DE BLOQUES Y VALIDACIÓN DE CRUCES
+    // ==========================================
+
+    /**
+     * [MODIFICADO] Crea o actualiza un bloque. Valida cruces de la propia sección,
+     * del docente, del grupo de estudiantes (programa + semestre + turno + sección) y del aula,
+     * siempre dentro del periodo activo.
+     */
     public function addSchedule()
     {
+        $this->authorize('gestionar-horarios');
+
+        // [CORREGIDO] La sección se vuelve a resolver en el servidor (no se confía en el id del formulario)
+        $assignment = $this->selectedAssignmentId ? $this->findSelectableAssignment($this->selectedAssignmentId) : null;
+        if (!$assignment) {
+            $this->dispatch('swal', [
+                'icon'  => 'warning',
+                'title' => 'Seleccione una sección',
+                'text'  => 'Seleccione el curso y la sección antes de registrar el bloque.'
+            ]);
+            return;
+        }
+
         $this->validate([
-            'day_of_week'             => 'required',
-            'start_time'              => 'required|date_format:H:i',
-            'end_time'                => 'required|date_format:H:i|after:start_time',
-            'classroom_resource_id'   => 'nullable|exists:classroom_resources,id',
+            'day_of_week'           => 'required|in:' . implode(',', self::DAYS),
+            'start_time'            => 'required|date_format:H:i',
+            'end_time'              => 'required|date_format:H:i|after:start_time',
+            'classroom_resource_id' => 'nullable|exists:classroom_resources,id',
         ]);
 
-        // 1. Verificar conflicto intra-asignatura (lógica existente)
-        $conflict = $this->currentSchedules->where('day_of_week', $this->day_of_week)
-            ->filter(function ($s) {
-                return ($this->start_time < $s->end_time->format('H:i')) &&
-                    ($this->end_time > $s->start_time->format('H:i'));
-            })->isNotEmpty();
+        $start = TimeCast::normalize($this->start_time);
+        $end = TimeCast::normalize($this->end_time);
 
-        if ($conflict) {
-            $this->dispatch('swal', [
-                'icon'  => 'error',
-                'title' => 'Conflicto',
-                'text'  => 'Ya existe un bloque horario para esta sección en ese día y rango.'
-            ]);
-            return;
-        }
-
-        // 2. Verificar cruces de DOCENTE en otras asignaciones dentro del mismo periodo
-        // 2. Verificar cruces de DOCENTE en otras asignaciones (excluyendo la actual)
-        $teacherId = $this->selectedAssignment->teacher_id;
-        $teacherConflict = Schedule::where('teacher_assignment_id', '!=', $this->selectedAssignmentId) // ← Exclusión clave
-            ->whereHas('teacherAssignment', function ($q) use ($teacherId) {
-                $q->where('teacher_id', $teacherId)
-                  ->where('academic_period_id', $this->activePeriod->id)
-                  ->where('status', 'active');
-            })
-            ->where('day_of_week', $this->day_of_week)
-            ->where(function ($q) {
-                $q->where('start_time', '<', $this->end_time)
-                  ->where('end_time', '>', $this->start_time);
-            })
-            ->exists();
-
-        if ($teacherConflict) {
-            $this->dispatch('swal', [
-                'icon'  => 'error',
-                'title' => 'Conflicto de docente',
-                'text'  => 'El profesor ya tiene otra clase programada en ese día y rango horario.'
-            ]);
-            return;
-        }
-
-        // 3. Verificar cruces de AULA (solo si se seleccionó una)
-        if ($this->classroom_resource_id) {
-            $classroomConflict = Schedule::where('classroom_resource_id', $this->classroom_resource_id)
-                ->where('day_of_week', $this->day_of_week)
-                ->where(function ($q) {
-                    $q->where('start_time', '<', $this->end_time)
-                        ->where('end_time', '>', $this->start_time);
-                })
-                ->exists();
-
-            if ($classroomConflict) {
-                $this->dispatch('swal', [
-                    'icon'  => 'error',
-                    'title' => 'Conflicto de aula',
-                    'text'  => 'El aula ya está ocupada en ese día y rango horario por otra sección.'
-                ]);
+        $editing = null;
+        if ($this->editingScheduleId) {
+            $editing = Schedule::where('teacher_assignment_id', $assignment->id)->find($this->editingScheduleId);
+            if (!$editing) {
+                $this->resetBlockForm();
                 return;
             }
         }
 
-        // 4. Crear el horario
-        Schedule::create([
-            'teacher_assignment_id' => $this->selectedAssignmentId,
-            'day_of_week'           => $this->day_of_week,
-            'start_time'            => $this->start_time,
-            'end_time'              => $this->end_time,
-            'classroom_resource_id' => $this->classroom_resource_id ?: null,
-        ]);
+        if ($message = $this->findConflict($assignment, $this->day_of_week, $start, $end, $editing?->id)) {
+            $this->dispatch('swal', ['icon' => 'error', 'title' => 'Cruce de horario', 'text' => $message]);
+            return;
+        }
 
-        $this->loadSchedules();
+        $data = [
+            'teacher_assignment_id' => $assignment->id,
+            'day_of_week'           => $this->day_of_week,
+            'start_time'            => $start,
+            'end_time'              => $end,
+            'classroom_resource_id' => $this->classroom_resource_id ?: null,
+        ];
+
+        $editing ? $editing->update($data) : Schedule::create($data);
+
         $this->dispatch('swal', [
             'icon'  => 'success',
-            'title' => 'Agregado',
-            'text'  => 'Bloque horario registrado correctamente.'
+            'title' => $editing ? 'Actualizado' : 'Agregado',
+            'text'  => $editing ? 'Bloque horario actualizado.' : 'Bloque horario registrado correctamente.'
         ]);
+
+        $this->resetBlockForm();
+        $this->loadSchedules();
+    }
+
+    /**
+     * [NUEVO] Devuelve el motivo del cruce o null si el bloque es válido.
+     */
+    private function findConflict(TeacherAssignment $assignment, string $day, string $start, string $end, ?int $ignoreScheduleId): ?string
+    {
+        $periodId = $this->activePeriod->id;
+
+        // Bloques del periodo activo que se solapan en el mismo día
+        $overlapping = fn () => Schedule::with(['teacherAssignment.didacticUnit', 'classroomResource'])
+            ->when($ignoreScheduleId, fn ($q) => $q->where('id', '!=', $ignoreScheduleId))
+            ->where('day_of_week', $day)
+            ->where('start_time', '<', $end)
+            ->where('end_time', '>', $start)
+            ->whereHas('teacherAssignment', fn ($q) => $q
+                ->where('academic_period_id', $periodId)
+                ->where('status', 'active'));
+
+        $describe = fn (Schedule $s) => sprintf(
+            '%s - Sección %s (%s a %s)',
+            $s->teacherAssignment->didacticUnit->name ?? 'Curso',
+            $s->teacherAssignment->section,
+            $s->start_time->format('H:i'),
+            $s->end_time->format('H:i')
+        );
+
+        // 1. Misma sección
+        if ($s = $overlapping()->where('teacher_assignment_id', $assignment->id)->first()) {
+            return 'Esta sección ya tiene un bloque en ese día y rango: ' . $describe($s) . '.';
+        }
+
+        // 2. Docente en otra sección
+        if ($s = $overlapping()
+            ->where('teacher_assignment_id', '!=', $assignment->id)
+            ->whereHas('teacherAssignment', fn ($q) => $q->where('teacher_id', $assignment->teacher_id))
+            ->first()) {
+            return 'El docente ya tiene clase en ese horario: ' . $describe($s) . '.';
+        }
+
+        // 3. [NUEVO] Mismo grupo de estudiantes: programa + semestre + turno + sección
+        $unit = $assignment->didacticUnit;
+        $careerId = $unit->module->studyPlan->career_id ?? null;
+        if ($careerId && $s = $overlapping()
+            ->where('teacher_assignment_id', '!=', $assignment->id)
+            ->whereHas('teacherAssignment', fn ($q) => $q
+                ->where('shift_id', $assignment->shift_id)
+                ->where('section', $assignment->section)
+                ->whereHas('didacticUnit', fn ($u) => $u
+                    ->where('semester', $unit->semester)
+                    ->whereHas('module.studyPlan', fn ($p) => $p->where('career_id', $careerId))))
+            ->first()) {
+            return "Los estudiantes del semestre {$unit->semester}, sección {$assignment->section} ya tienen otra clase en ese horario: " . $describe($s) . '.';
+        }
+
+        // 4. Aula (solo bloques del periodo activo; antes chocaba también con periodos pasados)
+        if ($this->classroom_resource_id && $s = $overlapping()
+            ->where('classroom_resource_id', $this->classroom_resource_id)
+            ->first()) {
+            return 'El aula ' . ($s->classroomResource->name ?? '') . ' ya está ocupada en ese horario: ' . $describe($s) . '.';
+        }
+
+        return null;
     }
 
     public function deleteSchedule($id)
     {
-        Schedule::find($id)?->delete();
+        $this->authorize('gestionar-horarios');
+
+        // [CORREGIDO] Solo bloques de la sección seleccionada
+        $deleted = $this->selectedAssignment
+            ? Schedule::where('teacher_assignment_id', $this->selectedAssignment->id)->whereKey($id)->delete()
+            : 0;
+
+        if ((int) $this->editingScheduleId === (int) $id) {
+            $this->resetBlockForm();
+        }
+
         $this->loadSchedules();
-        $this->dispatch('swal', [
-            'icon' => 'success',
-            'title' => 'Eliminado',
-            'text' => 'Bloque eliminado.'
-        ]);
+
+        if ($deleted) {
+            $this->dispatch('swal', [
+                'icon' => 'success',
+                'title' => 'Eliminado',
+                'text' => 'Bloque eliminado.'
+            ]);
+        }
     }
-    
+
     // ==========================================
     // EXPORTACIÓN - LÓGICA SIMPLIFICADA
     // ==========================================
@@ -498,6 +666,8 @@ class ScheduleManager extends Component
      */
     public function resetSemesterSchedules()
     {
+        $this->authorize('gestionar-horarios'); // [NUEVO]
+
         // Validar que los filtros necesarios estén seleccionados
         if (!$this->selectedCareerId || !$this->filterCycleId || !$this->filterShiftId || !$this->activePeriod) {
             $this->dispatch('swal', [

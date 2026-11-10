@@ -122,7 +122,7 @@
                         @if(!empty($unitResults))
                             <div class="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
                                 @foreach($unitResults as $unit)
-                                    <div wire:click="selectUnit({{ $unit->id }}, '{{ $unit->name }}', '{{ $unit->module->name ?? 'M?' }}', '{{ $unit->module->studyPlan->code ?? '?' }}')"
+                                    <div wire:key="unit-option-{{ $unit->id }}" wire:click="selectUnit({{ $unit->id }})"
                                          class="p-2 hover:bg-indigo-50 cursor-pointer text-sm border-b last:border-b-0">
                                         <div class="font-bold text-gray-800">{{ $unit->name }}</div>
                                         <div class="text-xs text-gray-500">
@@ -156,7 +156,7 @@
                         @if(!empty($teacherResults))
                             <div class="absolute z-10 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto mt-1">
                                 @foreach($teacherResults as $teacher)
-                                    <div wire:click="selectTeacher({{ $teacher->id }}, '{{ $teacher->user->name }} {{ $teacher->user->lastname }}')"
+                                    <div wire:key="teacher-option-{{ $teacher->id }}" wire:click="selectTeacher({{ $teacher->id }})"
                                          class="p-2 hover:bg-indigo-50 cursor-pointer text-sm border-b last:border-b-0">
                                         <div class="font-bold">{{ $teacher->user->name }} {{ $teacher->user->lastname }}</div>
                                         <div class="text-xs text-gray-500">DNI: {{ $teacher->user->document_number }}</div>

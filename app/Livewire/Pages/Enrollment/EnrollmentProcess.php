@@ -180,7 +180,8 @@ class EnrollmentProcess extends Component
             if ($course->validation_status !== 'available') continue;
 
             foreach ($course->schedules as $schedule) {
-                $slot = $schedule->day_of_week . '_' . $schedule->start_time . '_' . $schedule->end_time;
+                // [MODIFICADO] Las horas ahora son Carbon (TimeCast): se formatean explícitamente
+                $slot = $schedule->day_of_week . '_' . $schedule->start_time->format('H:i') . '_' . $schedule->end_time->format('H:i');
                 if (isset($scheduleSlots[$slot])) {
                     // ¡Conflicto!
                     $this->hasConflicts = true;

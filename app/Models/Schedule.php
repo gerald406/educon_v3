@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\TimeCast;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -19,9 +20,11 @@ class Schedule extends Model
         'end_time',
     ];
     
+    // [CORREGIDO] Con 'string' las horas llegaban como texto y ->format('H:i') fallaba
+    // en la gestión de horarios, reportes, matrícula, asistencias y visor público.
     protected $casts = [
-        'start_time' => 'string', // Formatear como 14:30
-        'end_time' => 'string',
+        'start_time' => TimeCast::class,
+        'end_time' => TimeCast::class,
     ];
 
     /**

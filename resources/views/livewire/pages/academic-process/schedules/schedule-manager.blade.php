@@ -68,7 +68,7 @@
                             @if(!empty($unitResults))
                                 <div class="absolute z-50 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto mt-1">
                                     @foreach($unitResults as $u)
-                                        <div wire:click="selectUnit({{ $u->id }}, '{{ $u->name }}', {{ $u->semester }})"
+                                        <div wire:key="unit-result-{{ $u->id }}" wire:click="selectUnit({{ $u->id }})"
                                             class="p-2 hover:bg-indigo-50 cursor-pointer text-sm border-b">
                                             <span class="font-bold">{{ $u->name }}</span>
                                             <span class="text-xs text-gray-500 block">Semestre {{ $u->semester }}</span>
@@ -99,7 +99,14 @@
                         {{-- FORMULARIO AGREGAR BLOQUE --}}
                         <div class="lg:col-span-1">
                             <div class="bg-white shadow-xl sm:rounded-lg p-5 sticky top-24">
-                                <h3 class="font-bold text-gray-800 mb-4 border-b pb-2">Agregar Bloque</h3>
+                                {{-- [MODIFICADO] El mismo formulario agrega o edita un bloque --}}
+                                <h3 class="font-bold text-gray-800 mb-1 border-b pb-2">
+                                    {{ $editingScheduleId ? 'Editar Bloque' : 'Agregar Bloque' }}
+                                </h3>
+                                <p class="text-xs text-gray-500 mb-4">
+                                    {{ $selectedAssignment->didacticUnit->name }} · Sección {{ $selectedAssignment->section }}
+                                    · {{ $selectedAssignment->teacher->user->lastname ?? '' }}
+                                </p>
                                 
                                 <div class="space-y-4">
                                     <div>
@@ -142,9 +149,30 @@
                                         </select>
                                     </div>
 
-                                    <button wire:click="addSchedule" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded shadow">
-                                        + Agregar
+                                    <button wire:click="addSchedule" wire:loading.attr="disabled" wire:target="addSchedule"
+                                            class="w-full {{ $editingScheduleId ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700' }} text-white font-bold py-2 px-4 rounded shadow disabled:opacity-50">
+                                        {{ $editingScheduleId ? 'Guardar cambios' : '+ Agregar' }}
                                     </button>
+                                    @if($editingScheduleId)
+                                        <button wire:click="cancelEdit" class="w-full text-sm text-gray-600 hover:text-gray-900 underline">
+                                            Cancelar edición
+                                        </button>
+                                    @endif
+
+                                    {{-- [NUEVO] Horas programadas vs. horas semanales de la unidad didáctica --}}
+                                    @php
+                                        $unitWeeklyHours = (float) ($selectedAssignment->didacticUnit->weekly_hours ?? 0);
+                                        $plannedHours = $this->scheduledHours;
+                                    @endphp
+                                    <div class="text-xs rounded p-2 border {{ $unitWeeklyHours > 0 && $plannedHours > $unitWeeklyHours ? 'bg-red-50 border-red-200 text-red-700' : 'bg-gray-50 border-gray-200 text-gray-600' }}">
+                                        Horas programadas: <strong>{{ $plannedHours }} h</strong>
+                                        @if($unitWeeklyHours > 0)
+                                            / {{ $unitWeeklyHours }} h semanales de la UD
+                                            @if($plannedHours > $unitWeeklyHours)
+                                                <span class="block mt-1 font-semibold">Supera las horas semanales de la unidad didáctica.</span>
+                                            @endif
+                                        @endif
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -214,7 +242,8 @@
                                                         $heightPercent = ($duration / 60 / 14) * 100;
                                                     @endphp
 
-                                                    <div class="relative z-10 border-l-4 {{ $shiftClass }} shadow-sm p-2 rounded mb-2 group hover:shadow-md hover:scale-105 transition-all duration-200"
+                                                    <div wire:key="sched-{{ $sched->id }}"
+                                                        class="relative z-10 border-l-4 {{ $shiftClass }} {{ (int) $editingScheduleId === $sched->id ? 'ring-2 ring-amber-500' : '' }} shadow-sm p-2 rounded mb-2 group hover:shadow-md hover:scale-105 transition-all duration-200"
                                                         style="margin-top: {{ $topPercent }}%;">
                                                         
                                                         {{-- Horario --}}
@@ -238,6 +267,15 @@
                                                         <div class="text-xs font-semibold mt-1 opacity-60">
                                                             {{ $isMorning ? '☀️ Mañana' : '🌙 Noche' }}
                                                         </div>
+
+                                                        {{-- [NUEVO] Botón editar (visible al hover) --}}
+                                                        <button wire:click="editSchedule({{ $sched->id }})"
+                                                                title="Editar bloque"
+                                                                class="absolute -top-2 right-5 bg-amber-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-amber-600">
+                                                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                                                            </svg>
+                                                        </button>
 
                                                         {{-- Botón eliminar (visible al hover) --}}
                                                         <button wire:click="deleteSchedule({{ $sched->id }})" 
