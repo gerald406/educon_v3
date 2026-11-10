@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Proyecto
 
-**EduCON**: sistema de gestión académica para un Instituto de Educación Superior Tecnológico Público (IESTP) del Perú, alineado a la normativa MINEDU. Cubre admisión, estructura académica (programas de estudio → planes → módulos formativos → unidades didácticas), carga docente, horarios, sílabos y sesiones de aprendizaje, matrícula, notas y asistencia, tesorería (comprobantes, caja, TUPA), certificación/egreso, biblioteca, tutoría y bienestar estudiantil (encuestas).
+**EduCON**: sistema de gestión académica para un Instituto de Educación Superior Tecnológico Público (IESTP) del Perú, alineado a la normativa MINEDU. Cubre admisión, estructura académica (programas de estudio → planes → módulos formativos → unidades didácticas), carga docente, horarios, sílabos y sesiones de aprendizaje, matrícula, notas y asistencia, certificación/egreso, biblioteca, tutoría y bienestar estudiantil (encuestas). El módulo de **tesorería fue retirado** (ver Dominio).
 
 El sistema **está en producción**: el código se descargó del servidor (commit inicial) y la BD de producción es MySQL con datos reales. Todo cambio de esquema debe ser compatible con datos existentes.
 
@@ -29,7 +29,14 @@ vendor/bin/pint --dirty              # formato de los archivos modificados
 php artisan optimize:clear           # tras cambiar rutas/config/permisos
 ```
 
-**Estado de los tests:** la suite falla casi entera (42/44) porque `create_library_resources_table` usa `$table->fullText(...)`, que SQLite no soporta, y todas las pruebas con `RefreshDatabase` revientan en la migración. Cualquier cambio verificado con tests requiere primero resolver eso (p. ej. condicionar el índice a `DB::getDriverName() === 'mysql'`).
+**Estado de los tests:** la suite corre en SQLite (el `fullText` de `create_library_resources_table` solo se crea en MySQL). Fallan 5 tests **preexistentes y ajenos** a sílabos/horarios: 3 de `CareerTest` (`MethodNotFoundException`), `AdmissionDashboardTest > metrics are calculated correctly` y `ProfileInformationTest`; cualquier otro fallo es una regresión. Para tests nuevos:
+- `TeacherFactory` necesita una `Institution` creada y el rol `Docente` (`Role::firstOrCreate(['name' => 'Docente'])`); `ShiftFactory` está vacía: crear turnos con `Shift::create([...])`. `AcademicPeriodFactory` usa un código fijo por año (`<año>-I`): para un segundo período pasar `code` distinto.
+- `CONCAT(...)` (buscadores de personas) y `orderByRaw("FIELD(...)")` no existen en SQLite: evitarlos en código nuevo o no ejercitarlos en tests.
+- Ejemplos: `tests/Feature/Syllabus/SyllabusRecoveryWeeksTest.php`, `tests/Feature/AcademicProcess/ScheduleManagerTest.php`.
+
+## Skills del proyecto (`.claude/skills/`)
+
+Usarlas antes de trabajar en su ámbito: `educon-livewire-module` (páginas/CRUD), `educon-migration` (esquema), `educon-permission` (permisos/roles), `educon-report-export` (PDF/Excel), `educon-testing` (tests y verificación), `educon-security-review` (autorización, pertenencia, estado; revisar diffs) y `educon-ux` (formularios, buscadores, feedback, grillas).
 
 ## Arquitectura
 
@@ -39,7 +46,7 @@ Casi toda la app son componentes en `app/Livewire/Pages/<Módulo>/...` registrad
 Patrón típico de un `*Manager` (ver `TeacherAssignments/TeacherAssignmentManager.php`):
 - `WithPagination` + filtros públicos (`$search`, `$filterPeriodId`…); el query se arma en `render()` y se pagina ahí.
 - Formulario como propiedades públicas sueltas + `rules()`; modal controlado por `$isModalOpen`; `create()/edit()/save()/closeModal()/resetInput()`.
-- Buscadores predictivos con `updatedSearchX()` llenando `$xResults` (mín. 2 caracteres, `take(5..10)`).
+- Buscadores predictivos con `updatedSearchX()` llenando `$xResults` (mín. 2 caracteres, `take(5..10)`). **`updatedSearchX()` debe limpiar el id seleccionado** (`$x_id = ''`) y `selectX($id)` recibir **solo el id** y leer el resto de la BD: si se conserva el id anterior al escribir otro texto, se guarda/sobrescribe el registro equivocado; y pasar nombres como `'{{ $nombre }}'` dentro de `wire:click` se rompe con apóstrofos. Al cambiar un filtro padre (carrera → curso → sección) resetear todo lo que depende de él.
 - Feedback al usuario **siempre** vía eventos del navegador escuchados en `layouts/app.blade.php`:
   - `$this->dispatch('swal', ['icon'=>..., 'title'=>..., 'text'=>...])` → toast.
   - `$this->dispatch('swal:confirm', [..., 'id'=>$id, 'onConfirmed'=>'deleteX'])` → confirmación que hace `Livewire.dispatch('deleteX', {id})`, capturado con `#[On('deleteX')]` en el componente.
@@ -63,9 +70,22 @@ Roles: `Administrador`, `Coordinador`, `Docente`, `Estudiante`, `Secretario Acad
 - `TeacherAssignment` = sección de un curso en un período (`academic_period_id`, `teacher_id`, `didactic_unit_id`, `shift_id`, `section`, `max_capacity`, `status`). Es el eje de `Schedule`, `Syllabus` (→ `SyllabusUnit` → `LearningSession`), `Registration`, notas y asistencias. Unicidad lógica: curso + sección + período.
 - Persona: `User` (Jetstream, `name`, `lastname`, `document_number` = DNI) 1–1 con `Teacher` o `Student`. Búsquedas por nombre usan `CONCAT(name, ' ', lastname)` (SQL específico de MySQL).
 - `Applicant` (admisión) → se convierte en `Student`. `Location` = ubigeo.
-- Tesorería: `CashSession`, `VoucherSeries` (correlativos), `Voucher`/`VoucherItem`, `CreditNote`, `StudentPayment`, `PaymentConcept` (TUPA).
+- Tesorería **retirada** (commit `be7a560`): se eliminaron componentes, vistas, PDFs, controladores, rutas, menú y permisos; la matrícula ya no exige comprobante ni bloquea por deuda. Los modelos (`CashSession`, `VoucherSeries`, `Voucher`/`VoucherItem`, `CreditNote`, `StudentPayment`, `PaymentConcept`), migraciones y datos **se conservan**: no reintroducir dependencias de pago sin pedirlo.
 - Bienestar: modelos en `App\Models\Wellness\Survey*` (formularios → secciones → preguntas → opciones; asignaciones; respuestas → answers).
 - Estados como strings (`active`, `inactive`, `suspended`, `completed`…), no enums de PHP.
+
+### Sílabos y sesiones de aprendizaje
+- Cadena: `TeacherAssignment` 1–1 `Syllabus` → `SyllabusIndicator` → `SyllabusUnit` (una semana) 1–1 `LearningSession`. Componentes: `Teacher/MySyllabi`, `SyllabusEditor`, `LearningSessionList`, `LearningSessionEditor`, `AcademicProcess/SyllabusApproval`; PDFs `Teacher/SyllabusPdfController`, `LearningSessionPdfController`.
+- Estados de `syllabi.status`: `draft → submitted → approved | observed` (+ `rejected`). `pending_approval` es **obsoleto** (no usarlo). Solo `draft`/`observed` son editables: toda acción mutadora de `SyllabusEditor` llama `ensureEditable()` (lee el estado en BD); ocultar botones no basta.
+- **Semanas:** estructura nueva = 16 regulares (por indicador) + **17 y 18 de "Reforzamiento y recuperación de capacidades no logradas"** (`syllabus_units.type = 'recovery'`, `syllabus_id` directo, `syllabus_indicator_id` NULL). Textos fijos e instrumentos en constantes de `SyllabusUnit` (`RECOVERY_*`, `INSTRUMENTS`); solo el instrumento es editable. `SyllabusRecoveryService::shouldApply/ensureFor` (idempotente) se aplica a sílabos nuevos, de períodos `planned` o que ya tienen recuperación; los de períodos activos/cerrados anteriores conservan **18 semanas regulares** (`Syllabus::maxRegularWeeks()`).
+- Para "todas las semanas de un sílabo" usar `SyllabusUnit::ofSyllabus($id)` (regulares + recuperación); `whereHas('indicator', ...)` / `indicators.units` devuelven **solo regulares**. Pertenencia de una semana a un sílabo: `LearningSession::unitBelongsToSyllabus()` (verificarla en rutas `{syllabus}/{unit}`).
+- Datos generales del sílabo (Tab I) son **solo lectura**: no modificar carrera, plan, módulo, UD, turno ni usuario desde el sílabo.
+- En producción `syllabus_indicators`, `syllabus_units`, `learning_sessions` y varias columnas de `syllabi` se crearon **fuera de las migraciones**; `2026_11_09_100000_create_syllabus_structure_tables_if_missing` las crea solo si faltan (no-op en producción, `down()` vacío a propósito).
+
+### Horarios (`academic-process/schedules`)
+- `Schedule` y `Shift` castean `start_time`/`end_time` con `App\Casts\TimeCast`: se leen como **Carbon** (`->format('H:i')`, `diffInMinutes`) y se guardan como `H:i:s`. No volver a `'time'`/`'string'` (Laravel no tiene cast `time`; con texto ~40 vistas/reportes fallan). En consultas, comparar contra `TimeCast::normalize($hora)`.
+- `ScheduleManager::findConflict()` valida cruces **solo en el período activo** y asignaciones `active`: misma sección, docente, grupo de estudiantes (programa + semestre + turno + sección) y aula. Los bloques se pueden editar (`editSchedule`).
+- La sección seleccionada se revalida en servidor (`findSelectableAssignment`: curso elegido + período activo); no confiar en el id del formulario.
 
 ### Reportes
 - Excel: clases en `app/Exports` con `FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles, WithTitle`; se descargan desde un método Livewire (`return Excel::download(...)`) o desde un controlador.
@@ -77,4 +97,5 @@ Roles: `Administrador`, `Coordinador`, `Docente`, `Estudiante`, `Secretario Acad
 - Los comentarios del código marcan cambios con `[NUEVO]`, `[MODIFICADO]`, `[CORREGIDO]`, `[REQUERIMIENTO]`; respetar el estilo de comentarios del archivo que se edita.
 - Las rutas comentadas de bienestar (`assignments`, `responses`, `reports`) tienen componentes ya creados pero aún no publicados.
 - Raíz del repo contiene volcados y respaldos versionados (`laravel_educon.sql`, `laraveleducon.sql`, `educon.zip`, `codigo_completo.txt`): no leerlos completos ni modificarlos; pueden contener datos personales.
+- `create_library_resources_table` (ya ejecutada) se editó solo para condicionar el `fullText` al driver: es la única excepción a "no editar migraciones ejecutadas", porque no cambia nada en producción.
 - Producción usa MySQL: evitar SQL que dependa de un motor si no se protege con el driver, y en migraciones sobre tablas existentes preferir columnas `nullable()`/con `default` e índices en migraciones separadas (`add_indexes_to_*`).

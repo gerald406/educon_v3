@@ -31,6 +31,8 @@ Referencia viva del patrón: `app/Livewire/Pages/AcademicProcess/TeacherAssignme
 
 6. **Verificar**: `php artisan route:list --name=<prefijo>`, cargar la página como usuario con y sin permiso, `vendor/bin/pint --dirty`.
 
+7. **Aplicar las skills transversales**: `educon-security-review` (permiso, pertenencia y estado en cada acción), `educon-ux` (buscadores que limpian el id al escribir, selects encadenados, confirmaciones, `wire:loading`) y `educon-testing` (test del componente con permiso/sin permiso/id ajeno).
+
 ## No hacer
 - No editar los archivos `*_`.php / `*.blade_.php` (respaldos).
 - No poner lógica de negocio compartida en el componente: si otro módulo la necesita, va a `app/Services`.
