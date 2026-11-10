@@ -84,8 +84,10 @@ Roles: `Administrador`, `Coordinador`, `Docente`, `Estudiante`, `Secretario Acad
 
 ### Horarios (`academic-process/schedules`)
 - `Schedule` y `Shift` castean `start_time`/`end_time` con `App\Casts\TimeCast`: se leen como **Carbon** (`->format('H:i')`, `diffInMinutes`) y se guardan como `H:i:s`. No volver a `'time'`/`'string'` (Laravel no tiene cast `time`; con texto ~40 vistas/reportes fallan). En consultas, comparar contra `TimeCast::normalize($hora)`.
-- `ScheduleManager::findConflict()` valida cruces **solo en el período activo** y asignaciones `active`: misma sección, docente, grupo de estudiantes (programa + semestre + turno + sección) y aula. Los bloques se pueden editar (`editSchedule`).
-- La sección seleccionada se revalida en servidor (`findSelectableAssignment`: curso elegido + período activo); no confiar en el id del formulario.
+- Flujo **por docente** (spec `docs/superpowers/specs/2026-11-10-horarios-por-docente-design.md`): programa → docente (solo con carga `active` del período activo en UD del programa; `teachers` no tiene `career_id`) → grilla con **todos** sus bloques (los de otros programas en solo lectura) → sus UD del programa → bloques. Sin buscador de UD por nombre.
+- Reglas en `App\Services\ScheduleValidationService::validate()`: aula `available`, bloque dentro del **turno** de la sección, sin superar `weekly_hours` de la UD (por sección) y sin cruces (sección, docente en cualquier programa, grupo programa + semestre + turno + sección, aula), solo período de la sección y asignaciones `active`. Turno sin horas o UD sin `weekly_hours` solo avisan (`warnings()`). Los bloques existentes que incumplen se marcan, no se borran.
+- `ScheduleManager::resolveAssignment()` revalida en servidor toda sección/bloque (período activo + `active` + docente + programa seleccionados); no confiar en ids del formulario. `teacher_assignments.status` ∈ `active|suspended|completed`.
+- Exportaciones (`schedules/export*`) exigen `permission:gestionar-horarios`; los consolidados validan parámetros y, como la vista consolidada y "Reiniciar semestre", solo consideran secciones `active`.
 
 ### Reportes
 - Excel: clases en `app/Exports` con `FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles, WithTitle`; se descargan desde un método Livewire (`return Excel::download(...)`) o desde un controlador.
