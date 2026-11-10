@@ -347,7 +347,7 @@
                                     wire:model="date_range"
                                     type="text"
                                     class="mt-1 block w-full"
-                                    placeholder="Ej. 01/04/2025 – 31/07/2025 (18 semanas)" />
+                                    placeholder="Ej. 01/04/2025 – 31/07/2025 (16 semanas + 2 de recuperación)" />
                             </div>
 
                             {{-- 1.11 Turno --}}

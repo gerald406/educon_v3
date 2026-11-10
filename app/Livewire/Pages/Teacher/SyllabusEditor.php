@@ -8,6 +8,7 @@ use App\Models\SyllabusUnit;
 use App\Models\TeacherAssignment;
 use App\Services\SyllabusRecoveryService;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
@@ -82,10 +83,13 @@ class SyllabusEditor extends Component
 
     // --- ESTRUCTURAS COMPLEJAS ---
     public $indicators;
+    // [CORREGIDO] Bloqueadas: el navegador no puede cambiarlas para saltarse el límite de semanas
+    #[Locked]
     public $total_weeks_programmed = 0;
 
     // [NUEVO] Semanas 17 y 18: Reforzamiento y recuperación (vacío en sílabos con la estructura anterior)
     public $recoveryUnits;
+    #[Locked]
     public $maxRegularWeeks = SyllabusUnit::LEGACY_MAX_REGULAR_WEEKS;
 
     // ✅ LISTENERS para sincronización con CKEditor
@@ -125,54 +129,74 @@ class SyllabusEditor extends Component
     // HANDLERS para recibir datos de CKEditor
     // ========================================
 
+    /**
+     * [NUEVO] Los handlers son invocables desde el navegador con cualquier argumento:
+     * solo se acepta texto (un array rompía la vista y el guardado).
+     */
+    private function onlyText($content): string
+    {
+        return is_string($content) ? $content : '';
+    }
+
+    /**
+     * [NUEVO] Registra el error real en el log y devuelve un mensaje genérico
+     * (antes se mostraba $e->getMessage(), que puede exponer SQL o rutas internas).
+     */
+    private function genericError(\Throwable $e): string
+    {
+        report($e);
+
+        return 'No se pudo guardar. Intente nuevamente.';
+    }
+
     public function handleSumillaUpdate($content)
     {
-        $this->sumilla = $content;
+        $this->sumilla = $this->onlyText($content);
     }
 
     public function handleUnitCompetenceUpdate($content)
     {
-        $this->unit_competence = $content;
+        $this->unit_competence = $this->onlyText($content);
     }
 
     public function handleCourseCapacityUpdate($content)
     {
-        $this->course_capacity = $content;
+        $this->course_capacity = $this->onlyText($content);
     }
 
     public function handleEmployabilityUpdate($content)
     {
-        $this->employability_content = $content;
+        $this->employability_content = $this->onlyText($content);
     }
 
     public function handleMethodologyUpdate($content)
     {
-        $this->methodology = $content;
+        $this->methodology = $this->onlyText($content);
     }
 
     public function handleEnvironmentsUpdate($content)
     {
-        $this->environments = $content;
+        $this->environments = $this->onlyText($content);
     }
 
     public function handleResourcesUpdate($content)
     {
-        $this->resources = $content;
+        $this->resources = $this->onlyText($content);
     }
 
     public function handleEvaluationUpdate($content)
     {
-        $this->evaluation_system = $content;
+        $this->evaluation_system = $this->onlyText($content);
     }
 
     public function handleBibliographyUpdate($content)
     {
-        $this->bibliography = $content;
+        $this->bibliography = $this->onlyText($content);
     }
 
     public function handleWebSourcesUpdate($content)
     {
-        $this->web_sources = $content;
+        $this->web_sources = $this->onlyText($content);
     }
 
     // ========================================
@@ -181,7 +205,9 @@ class SyllabusEditor extends Component
 
     public function mount(TeacherAssignment $assignment)
     {
-        if ($assignment->teacher_id !== auth()->user()->teacher->id) {
+        // [CORREGIDO] Administrador/Coordinador pueden no tener perfil docente (antes: error 500)
+        $teacherId = auth()->user()->teacher?->id;
+        if (!$teacherId || $assignment->teacher_id !== $teacherId) {
             abort(403, 'Acceso denegado.');
         }
 
@@ -307,11 +333,15 @@ class SyllabusEditor extends Component
         $indicator = SyllabusIndicator::where('syllabus_id', $this->syllabus->id)->find($indicatorId);
         if (!$indicator) return;
 
-        $nextSessionNumber = $this->total_weeks_programmed + 1;
+        // [CORREGIDO] Semanas y límite leídos de la BD, no del estado del componente
+        // (otra pestaña pudo agregar semanas). 16 regulares (17-18 son de recuperación); 18 en sílabos anteriores
+        $nextSessionNumber = $this->regularUnitsQuery()->count() + 1;
+        $this->syllabus->unsetRelation('recoveryUnits');
+        $maxRegularWeeks = $this->syllabus->maxRegularWeeks();
 
-        // [MODIFICADO] 16 semanas regulares (las 17-18 son de recuperación); 18 en sílabos anteriores
-        if ($nextSessionNumber > $this->maxRegularWeeks) {
-            $this->dispatch('swal', ['icon' => 'warning', 'title' => 'Límite alcanzado', 'text' => "Ya has programado las {$this->maxRegularWeeks} semanas regulares."]);
+        if ($nextSessionNumber > $maxRegularWeeks) {
+            $this->loadIndicatorsWithUnits();
+            $this->dispatch('swal', ['icon' => 'warning', 'title' => 'Límite alcanzado', 'text' => "Ya has programado las {$maxRegularWeeks} semanas regulares."]);
             return;
         }
 
@@ -369,11 +399,19 @@ class SyllabusEditor extends Component
         $this->loadIndicatorsWithUnits();
     }
 
+    /**
+     * [NUEVO] Semanas regulares (1-16, o 1-18 en sílabos anteriores) de este sílabo.
+     */
+    private function regularUnitsQuery()
+    {
+        return SyllabusUnit::whereHas('indicator', function ($q) {
+            $q->where('syllabus_id', $this->syllabus->id);
+        });
+    }
+
     private function reorderSessions()
     {
-        $allUnits = SyllabusUnit::whereHas('indicator', function ($q) {
-            $q->where('syllabus_id', $this->syllabus->id);
-        })->orderBy('id')->get();
+        $allUnits = $this->regularUnitsQuery()->orderBy('id')->get();
 
         foreach ($allUnits as $index => $unit) {
             $unit->update(['session_number' => $index + 1]);
@@ -408,7 +446,7 @@ class SyllabusEditor extends Component
             $this->dispatch('swal', [
                 'icon' => 'error',
                 'title' => 'Error',
-                'text' => 'No se pudo guardar: ' . $e->getMessage()
+                'text' => $this->genericError($e)
             ]);
         }
     }
@@ -433,7 +471,7 @@ class SyllabusEditor extends Component
             $this->dispatch('swal', [
                 'icon' => 'error',
                 'title' => 'Error',
-                'text' => 'No se pudo guardar: ' . $e->getMessage()
+                'text' => $this->genericError($e)
             ]);
         }
     }
@@ -524,7 +562,7 @@ class SyllabusEditor extends Component
             $this->dispatch('swal', [
                 'icon' => 'error',
                 'title' => 'Error',
-                'text' => 'No se pudo guardar: ' . $e->getMessage()
+                'text' => $this->genericError($e)
             ]);
         }
     }
@@ -548,7 +586,7 @@ class SyllabusEditor extends Component
             $this->dispatch('swal', [
                 'icon' => 'error',
                 'title' => 'Error',
-                'text' => 'No se pudo guardar: ' . $e->getMessage()
+                'text' => $this->genericError($e)
             ]);
         }
     }
@@ -598,7 +636,7 @@ class SyllabusEditor extends Component
             $this->dispatch('swal', [
                 'icon' => 'error',
                 'title' => 'Error',
-                'text' => 'No se pudo guardar: ' . $e->getMessage()
+                'text' => $this->genericError($e)
             ]);
         }
     }
@@ -611,28 +649,31 @@ class SyllabusEditor extends Component
     {
         if (!$this->ensureEditable()) return; // [CORREGIDO] validar estado en el servidor
 
+        // [MODIFICADO] Las validaciones avisan directamente; el catch queda solo para errores
+        // inesperados, que ya no muestran detalles técnicos.
+        // 1. Validar campo permitido
+        $allowedFields = ['name', 'content', 'learning_outcome', 'evaluation_instrument'];
+
+        if (!in_array($fieldName, $allowedFields, true) || !is_string($value)) {
+            $this->dispatch('swal', ['icon' => 'error', 'title' => 'Error', 'text' => 'Campo no permitido.']);
+            return;
+        }
+
+        // 2. Verificar pertenencia al sílabo del docente autenticado
+        $unit = $this->regularUnitsQuery()->find($unitId);
+
+        if (!$unit) {
+            $this->dispatch('swal', ['icon' => 'error', 'title' => 'Error', 'text' => 'Acceso denegado.']);
+            return;
+        }
+
+        // [NUEVO] El instrumento debe ser uno de la lista permitida
+        if ($fieldName === 'evaluation_instrument' && !in_array($value, SyllabusUnit::INSTRUMENTS, true)) {
+            $this->dispatch('swal', ['icon' => 'error', 'title' => 'Error', 'text' => 'Instrumento no válido.']);
+            return;
+        }
+
         try {
-            // 1. Validar campo permitido
-            $allowedFields = ['name', 'content', 'learning_outcome', 'evaluation_instrument'];
-
-            if (!in_array($fieldName, $allowedFields)) {
-                throw new \Exception('Campo no permitido');
-            }
-
-            // 2. Verificar pertenencia al sílabo del docente autenticado
-            $unit = SyllabusUnit::whereHas('indicator', function ($q) {
-                $q->where('syllabus_id', $this->syllabus->id);
-            })->find($unitId);
-
-            if (!$unit) {
-                throw new \Exception('Acceso denegado');
-            }
-
-            // [NUEVO] El instrumento debe ser uno de la lista permitida
-            if ($fieldName === 'evaluation_instrument' && !in_array($value, SyllabusUnit::INSTRUMENTS, true)) {
-                throw new \Exception('Instrumento no válido');
-            }
-
             // 3. Actualizar solo el campo específico
             $unit->update([$fieldName => $value]);
 
@@ -642,7 +683,7 @@ class SyllabusEditor extends Component
             $this->dispatch('swal', [
                 'icon' => 'error',
                 'title' => 'Error',
-                'text' => 'No se pudo actualizar: ' . $e->getMessage()
+                'text' => $this->genericError($e)
             ]);
         }
     }
@@ -681,15 +722,16 @@ class SyllabusEditor extends Component
     {
         if (!$this->ensureEditable()) return; // [CORREGIDO] validar estado en el servidor
 
+        // Verificar que el indicador pertenece al sílabo del docente autenticado
+        $indicator = SyllabusIndicator::where('syllabus_id', $this->syllabus->id)
+            ->find($indicatorId);
+
+        if (!$indicator || !is_string($description)) {
+            $this->dispatch('swal', ['icon' => 'error', 'title' => 'Error', 'text' => 'Acceso denegado.']);
+            return;
+        }
+
         try {
-            // Verificar que el indicador pertenece al sílabo del docente autenticado
-            $indicator = SyllabusIndicator::where('syllabus_id', $this->syllabus->id)
-                ->find($indicatorId);
-
-            if (!$indicator) {
-                throw new \Exception('Acceso denegado');
-            }
-
             $indicator->update(['description' => $description]);
 
             // Solo recalcular, NO recargar toda la colección
@@ -698,7 +740,7 @@ class SyllabusEditor extends Component
             $this->dispatch('swal', [
                 'icon' => 'error',
                 'title' => 'Error',
-                'text' => 'No se pudo actualizar: ' . $e->getMessage()
+                'text' => $this->genericError($e)
             ]);
         }
     }
@@ -720,7 +762,7 @@ class SyllabusEditor extends Component
             $this->dispatch('swal', [
                 'icon' => 'error',
                 'title' => 'Error',
-                'text' => 'No se pudo guardar: ' . $e->getMessage()
+                'text' => $this->genericError($e)
             ]);
         }
     }
@@ -745,7 +787,7 @@ class SyllabusEditor extends Component
             $this->dispatch('swal', [
                 'icon' => 'error',
                 'title' => 'Error',
-                'text' => 'No se pudo guardar: ' . $e->getMessage()
+                'text' => $this->genericError($e)
             ]);
         }
     }
@@ -767,7 +809,7 @@ class SyllabusEditor extends Component
             $this->dispatch('swal', [
                 'icon' => 'error',
                 'title' => 'Error',
-                'text' => 'No se pudo guardar: ' . $e->getMessage()
+                'text' => $this->genericError($e)
             ]);
         }
     }
@@ -792,7 +834,7 @@ class SyllabusEditor extends Component
             $this->dispatch('swal', [
                 'icon' => 'error',
                 'title' => 'Error',
-                'text' => 'No se pudo guardar: ' . $e->getMessage()
+                'text' => $this->genericError($e)
             ]);
         }
     }
@@ -812,27 +854,37 @@ class SyllabusEditor extends Component
             return;
         }
 
-        if (
-            empty(trim(strip_tags($this->sumilla))) ||
-            empty(trim(strip_tags($this->methodology))) ||
-            empty(trim(strip_tags($this->evaluation_system))) ||
-            $this->total_weeks_programmed == 0
-        ) {
-            $this->dispatch('swal', [
-                'icon' => 'error',
-                'title' => 'Sílabo Incompleto',
-                'text' => 'Debe completar la Sumilla, Metodología, Evaluación y programar al menos una sesión antes de enviar a aprobación.'
-            ]);
+        if (!$this->ensureComplete()) {
             return;
         }
 
         $this->confirmingSubmission = true;
     }
 
+    /**
+     * [NUEVO] Completitud según lo GUARDADO en la BD (no el texto escrito en los editores sin guardar,
+     * ni el texto de evaluación por defecto, que se muestra pero no se guarda hasta pulsar Guardar).
+     */
+    private function ensureComplete(): bool
+    {
+        if (Syllabus::find($this->syllabus->id)?->isReadyForSubmission()) {
+            return true;
+        }
+
+        $this->dispatch('swal', [
+            'icon' => 'error',
+            'title' => 'Sílabo Incompleto',
+            'text' => 'Debe completar y GUARDAR la Sumilla, Metodología y Evaluación, y programar al menos una sesión antes de enviar a aprobación.'
+        ]);
+
+        return false;
+    }
+
     public function submitSyllabus()
     {
-        // [CORREGIDO] validar estado en el servidor (y cerrar el modal si ya no es editable)
-        if (!$this->ensureEditable()) {
+        // [CORREGIDO] validar estado y completitud en el servidor (y cerrar el modal si no procede):
+        // este método se puede invocar directamente sin pasar por confirmSubmit()
+        if (!$this->ensureEditable() || !$this->ensureComplete()) {
             $this->confirmingSubmission = false;
             return;
         }

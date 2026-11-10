@@ -119,10 +119,11 @@ class Syllabus extends Model
      */
     public function isReadyForSubmission(): bool
     {
-        return !empty(trim(strip_tags($this->sumilla))) &&
-            !empty(trim(strip_tags($this->methodology))) &&
-            !empty(trim(strip_tags($this->evaluation_system))) &&
-            $this->indicators()->exists();
+        return !empty(trim(strip_tags($this->sumilla ?? ''))) &&
+            !empty(trim(strip_tags($this->methodology ?? ''))) &&
+            !empty(trim(strip_tags($this->evaluation_system ?? ''))) &&
+            // [MODIFICADO] al menos una semana regular programada (antes bastaba un indicador vacío)
+            SyllabusUnit::whereHas('indicator', fn ($q) => $q->where('syllabus_id', $this->id))->exists();
     }
 
     /**

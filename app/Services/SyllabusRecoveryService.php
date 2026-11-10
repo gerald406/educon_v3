@@ -13,8 +13,9 @@ use Illuminate\Support\Facades\DB;
  * con texto fijo e instrumento seleccionable. Se aplica a:
  *   - sílabos que ya la usan,
  *   - sílabos recién creados,
- *   - sílabos de un periodo académico en planificación ('planned').
- * Los sílabos de periodos activos/cerrados creados antes conservan sus 18 semanas regulares.
+ *   - [MODIFICADO] sílabos editables (draft/observed) de cualquier periodo.
+ * Los sílabos enviados o aprobados con la estructura anterior conservan sus 18 semanas
+ * regulares: no se modifica un documento que ya está en revisión o aprobado.
  */
 class SyllabusRecoveryService
 {
@@ -24,7 +25,7 @@ class SyllabusRecoveryService
             return true;
         }
 
-        return $syllabus->teacherAssignment?->academicPeriod?->status === 'planned';
+        return in_array($syllabus->status, ['draft', 'observed'], true);
     }
 
     /**

@@ -126,10 +126,41 @@ class SyllabusRecoveryWeeksTest extends TestCase
         $component->assertSet('total_weeks_programmed', 16);
     }
 
-    public function test_legacy_syllabus_of_active_period_keeps_18_regular_weeks(): void
+    public function test_legacy_draft_syllabus_of_active_period_is_converted_to_16_plus_recovery(): void
+    {
+        $assignment = $this->makeAssignment('active');
+        $syllabus = $this->makeLegacySyllabus($assignment, 2);
+
+        Livewire::actingAs($this->teacherUser($assignment))
+            ->test(SyllabusEditor::class, ['assignment' => $assignment])
+            ->assertSet('maxRegularWeeks', 16)
+            ->assertSet('total_weeks_programmed', 2)
+            ->set('activeTab', 'programming')
+            ->assertSee('Semanas programadas: 2 / 16');
+
+        $this->assertSame(2, $syllabus->recoveryUnits()->count());
+        $this->assertSame(2, SyllabusUnit::where('type', SyllabusUnit::TYPE_REGULAR)->count());
+    }
+
+    public function test_legacy_observed_syllabus_of_active_period_is_converted(): void
     {
         $assignment = $this->makeAssignment('active');
         $syllabus = $this->makeLegacySyllabus($assignment, 18);
+        $syllabus->update(['status' => 'observed']);
+
+        Livewire::actingAs($this->teacherUser($assignment))
+            ->test(SyllabusEditor::class, ['assignment' => $assignment])
+            ->assertSet('maxRegularWeeks', 16)
+            ->assertSet('total_weeks_programmed', 16);
+
+        $this->assertSame(2, $syllabus->recoveryUnits()->count());
+    }
+
+    public function test_legacy_approved_syllabus_of_planned_period_keeps_18_regular_weeks(): void
+    {
+        $assignment = $this->makeAssignment('planned');
+        $syllabus = $this->makeLegacySyllabus($assignment, 18);
+        $syllabus->update(['status' => 'approved']);
 
         Livewire::actingAs($this->teacherUser($assignment))
             ->test(SyllabusEditor::class, ['assignment' => $assignment])
@@ -138,6 +169,20 @@ class SyllabusRecoveryWeeksTest extends TestCase
 
         $this->assertSame(0, $syllabus->recoveryUnits()->count());
         $this->assertSame(18, SyllabusUnit::where('type', SyllabusUnit::TYPE_REGULAR)->count());
+        $this->assertSame('Tema 17', SyllabusUnit::where('session_number', 17)->value('name'));
+    }
+
+    public function test_legacy_submitted_syllabus_of_active_period_keeps_18_regular_weeks(): void
+    {
+        $assignment = $this->makeAssignment('active');
+        $syllabus = $this->makeLegacySyllabus($assignment, 18);
+        $syllabus->update(['status' => 'submitted']);
+
+        Livewire::actingAs($this->teacherUser($assignment))
+            ->test(SyllabusEditor::class, ['assignment' => $assignment])
+            ->assertSet('maxRegularWeeks', 18);
+
+        $this->assertSame(0, $syllabus->recoveryUnits()->count());
     }
 
     public function test_legacy_syllabus_of_planned_period_is_converted(): void
