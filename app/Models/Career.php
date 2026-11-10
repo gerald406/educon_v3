@@ -14,6 +14,7 @@ class Career extends Model
         'institution_id',
         'code',
         'name',
+        'short_name', // [NUEVO] Nombre corto para horarios
         'duration_semesters',
         'degree_awarded',
         'authorization_resolution',
@@ -35,7 +36,7 @@ class Career extends Model
     {
         return $this->hasMany(StudyPlan::class);
     }
-    
+
     /**
      * [NUEVA FUNCIÓN AÑADIDA]
      * Una carrera tiene muchos estudiantes.

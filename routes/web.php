@@ -67,6 +67,8 @@ use App\Http\Controllers\ScheduleReportController;
 use App\Http\Controllers\StudentReportController;
 use App\Http\Controllers\Teacher\LearningSessionPdfController;
 use App\Http\Controllers\Teacher\SyllabusPdfController;
+use App\Http\Controllers\Teacher\TeacherDocumentController;
+use App\Livewire\Pages\Teacher\MySchedule;
 use App\Livewire\Pages\AcademicProcess\EnrollmentListManager;
 use App\Livewire\Pages\AcademicProcess\EnrollmentReservationManager;
 use App\Livewire\Pages\AcademicProcess\RegularEnrollmentManager;
@@ -231,6 +233,11 @@ Route::prefix('teacher')->middleware(['auth', 'verified', 'role:Docente|Coordina
 
     Route::get('my-syllabi/{syllabus}/sessions/{unit}/pdf', [LearningSessionPdfController::class, 'download'])
         ->name('sessions.pdf');
+
+    // [NUEVO] Horario personal del docente autenticado (sin ids: usa su ficha y el período activo)
+    Route::get('my-schedule', MySchedule::class)->name('my-schedule');
+    Route::get('my-schedule/personal-excel', [TeacherDocumentController::class, 'personalSchedule'])
+        ->name('my-schedule.personal-excel');
 
     Route::get('activities', ActivityManager::class)->middleware('permission:gestionar-actividades')->name('activities');
     Route::get('submissions', SubmissionReview::class)->middleware('permission:revisar-entregas')->name('submissions');

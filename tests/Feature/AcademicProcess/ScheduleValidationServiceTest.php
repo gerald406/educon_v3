@@ -122,47 +122,90 @@ class ScheduleValidationServiceTest extends TestCase
         $this->assertContains('El turno de la sección no tiene horario registrado.', $this->service->warnings($a));
     }
 
-    // --- Horas semanales ---
+    // --- Horas semanales (horas pedagógicas: 45 min en la mañana, 40 min en la noche) ---
 
     public function test_block_completing_weekly_hours_is_valid(): void
     {
         $a = $this->section($this->unit());
-        $this->block($a, 'monday', '08:00', '11:00');
+        $this->block($a, 'monday', '08:00', '10:15'); // 3 franjas de 45 min
 
-        $this->assertSame(60, $this->service->remainingMinutes($a));
-        $this->assertNull($this->service->validate($a, 'tuesday', '11:00', '12:00', null));
+        $this->assertSame(45, $this->service->remainingMinutes($a));
+        $this->assertNull($this->service->validate($a, 'tuesday', '10:15', '11:00', null));
     }
 
     public function test_block_exceeding_weekly_hours_is_rejected(): void
     {
         $a = $this->section($this->unit());
-        $this->block($a, 'monday', '08:00', '11:00');
+        $this->block($a, 'monday', '08:00', '10:15');
 
         $this->assertSame(
             'La UD tiene 4 h semanales; ya hay 3 h programadas, quedan 1 h.',
-            $this->service->validate($a, 'tuesday', '08:00', '10:00', null)
+            $this->service->validate($a, 'tuesday', '08:00', '09:30', null)
         );
     }
 
     public function test_hours_message_formats_fractions(): void
     {
-        $a = $this->section($this->unit());
-        $this->block($a, 'monday', '08:00', '10:30');
+        // Turno fuera de las jornadas oficiales: se mantiene la hora de 60 min
+        $afternoon = Shift::create(['name' => 'Tarde', 'start_time' => '13:30', 'end_time' => '18:00']);
+        $a = $this->section($this->unit(), ['shift_id' => $afternoon->id]);
+        $this->block($a, 'monday', '13:30', '16:00');
 
+        $this->assertSame(60, $this->service->minutesPerHour($a));
         $this->assertSame(
             'La UD tiene 4 h semanales; ya hay 2.5 h programadas, quedan 1.5 h.',
-            $this->service->validate($a, 'tuesday', '08:00', '10:00', null)
+            $this->service->validate($a, 'tuesday', '13:30', '15:30', null)
         );
     }
 
     public function test_editing_block_is_not_counted_twice(): void
     {
         $a = $this->section($this->unit());
-        $existing = $this->block($a, 'monday', '08:00', '12:00');
+        $existing = $this->block($a, 'monday', '08:00', '11:00'); // 4 franjas de 45 min
 
-        $this->assertSame(240, $this->service->scheduledMinutes($a));
+        $this->assertSame(180, $this->service->scheduledMinutes($a));
         $this->assertSame(0, $this->service->scheduledMinutes($a, $existing->id));
-        $this->assertNull($this->service->validate($a, 'monday', '08:00', '12:00', null, $existing->id));
+        $this->assertNull($this->service->validate($a, 'monday', '08:00', '11:00', null, $existing->id));
+    }
+
+    public function test_morning_break_does_not_count_as_teaching_time(): void
+    {
+        $a = $this->section($this->unit());
+
+        // 4ta (10:15-11:00) + receso + 5ta (11:30-12:15) = 2 horas pedagógicas
+        $this->assertSame(90, $this->service->blockMinutes($a, '10:15', '12:15'));
+        $this->block($a, 'monday', '10:15', '12:15');
+        $this->assertSame(90, $this->service->remainingMinutes($a));
+    }
+
+    public function test_night_shift_uses_forty_minute_hours(): void
+    {
+        $night = Shift::create(['name' => 'Nocturno', 'start_time' => '17:00', 'end_time' => '21:00']);
+        $a = $this->section($this->unit(), ['shift_id' => $night->id]);
+
+        $this->assertSame(40, $this->service->minutesPerHour($a));
+        $this->assertSame(160, $this->service->weeklyMinutes($a));
+
+        // 4 franjas de 40 min completan las 4 h; una quinta se rechaza
+        $this->assertNull($this->service->validate($a, 'monday', '17:00', '19:40', null));
+        $this->block($a, 'monday', '17:00', '19:40');
+        $this->assertSame(
+            'La UD tiene 4 h semanales; ya hay 4 h programadas, quedan 0 h.',
+            $this->service->validate($a, 'tuesday', '17:00', '17:40', null)
+        );
+    }
+
+    public function test_block_not_aligned_counts_every_slot_it_touches(): void
+    {
+        $a = $this->section($this->unit());
+
+        // 08:10-09:00 toca la 1ra y la 2da franja
+        $this->assertSame(90, $this->service->blockMinutes($a, '08:10', '09:00'));
+    }
+
+    public function test_saturday_is_not_a_schedulable_day(): void
+    {
+        $this->assertSame(['monday', 'tuesday', 'wednesday', 'thursday', 'friday'], ScheduleValidationService::DAYS);
     }
 
     public function test_unit_without_weekly_hours_does_not_block(): void
@@ -180,19 +223,19 @@ class ScheduleValidationServiceTest extends TestCase
         $unit = $this->unit();
         $a = $this->section($unit);
         $b = $this->section($unit, ['section' => 'B']);
-        $this->block($a, 'monday', '08:00', '12:00');
+        $this->block($a, 'monday', '08:00', '11:00');
 
-        $this->assertNull($this->service->validate($b, 'tuesday', '08:00', '12:00', null));
+        $this->assertNull($this->service->validate($b, 'tuesday', '08:00', '11:00', null));
     }
 
     // --- Cruces ---
 
     public function test_overlap_in_same_section_is_rejected(): void
     {
-        $a = $this->section($this->unit());
-        $this->block($a, 'monday', '08:00', '10:00');
+        $a = $this->section($this->unit(['weekly_hours' => 6]));
+        $this->block($a, 'monday', '08:00', '09:30');
 
-        $this->assertStringStartsWith('Esta sección ya tiene un bloque', $this->service->validate($a, 'monday', '09:00', '10:30', null));
+        $this->assertStringStartsWith('Esta sección ya tiene un bloque', $this->service->validate($a, 'monday', '08:45', '10:15', null));
     }
 
     public function test_teacher_overlap_in_another_program_is_rejected(): void

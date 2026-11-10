@@ -12,7 +12,8 @@ use Carbon\Carbon;
  * [NUEVO] Reglas de los bloques horarios de una sección (TeacherAssignment):
  *   1. aula disponible,
  *   2. dentro del horario del turno de la sección,
- *   3. sin superar las horas semanales de la UD (por sección),
+ *   3. sin superar las horas semanales de la UD (por sección), contadas en horas pedagógicas
+ *      del turno (45 min mañana, 40 min noche; ver PedagogicalHourService),
  *   4. sin cruces de sección, docente (cualquier programa), grupo de estudiantes ni aula,
  *      solo en el período de la sección y con asignaciones activas.
  *
@@ -20,7 +21,10 @@ use Carbon\Carbon;
  */
 class ScheduleValidationService
 {
-    public const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    // [MODIFICADO] No se dicta clase los sábados: solo se programa de lunes a viernes.
+    public const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+
+    public function __construct(private PedagogicalHourService $pedagogicalHours) {}
 
     /**
      * Devuelve el primer motivo por el que el bloque no es válido, o null si es válido.
@@ -34,7 +38,7 @@ class ScheduleValidationService
         ?int $classroomId,
         ?int $ignoreScheduleId = null
     ): ?string {
-        if ($classroomId && !ClassroomResource::whereKey($classroomId)->where('status', 'available')->exists()) {
+        if ($classroomId && ! ClassroomResource::whereKey($classroomId)->where('status', 'available')->exists()) {
             return 'El aula seleccionada no está disponible.';
         }
 
@@ -45,12 +49,14 @@ class ScheduleValidationService
         }
 
         $remaining = $this->remainingMinutes($assignment, $ignoreScheduleId);
-        if ($remaining !== null && $this->minutesBetween($start, $end) > $remaining) {
+        if ($remaining !== null && $this->blockMinutes($assignment, $start, $end) > $remaining) {
+            $perHour = $this->minutesPerHour($assignment);
+
             return sprintf(
                 'La UD tiene %s h semanales; ya hay %s h programadas, quedan %s h.',
-                $this->formatHours((int) round($this->weeklyHours($assignment) * 60)),
-                $this->formatHours($this->scheduledMinutes($assignment, $ignoreScheduleId)),
-                $this->formatHours(max(0, $remaining))
+                $this->formatHours($this->weeklyMinutes($assignment), $perHour),
+                $this->formatHours($this->scheduledMinutes($assignment, $ignoreScheduleId), $perHour),
+                $this->formatHours(max(0, $remaining), $perHour)
             );
         }
 
@@ -70,7 +76,40 @@ class ScheduleValidationService
         return (int) $assignment->schedules()
             ->when($ignoreScheduleId, fn ($q) => $q->whereKeyNot($ignoreScheduleId))
             ->get()
-            ->sum(fn (Schedule $s) => abs($s->start_time->diffInMinutes($s->end_time)));
+            ->sum(fn (Schedule $s) => $this->blockMinutes($assignment, $s->start_time->format('H:i'), $s->end_time->format('H:i')));
+    }
+
+    /** [NUEVO] Minutos de la hora pedagógica del turno de la sección (45, 40 o 60). */
+    public function minutesPerHour(TeacherAssignment $assignment): int
+    {
+        return $this->pedagogicalHours->minutesPerHour($assignment->shift);
+    }
+
+    /** [NUEVO] Horas semanales de la UD expresadas en minutos del turno de la sección. */
+    public function weeklyMinutes(TeacherAssignment $assignment): int
+    {
+        return (int) round($this->weeklyHours($assignment) * $this->minutesPerHour($assignment));
+    }
+
+    /**
+     * [NUEVO] Minutos lectivos de un bloque. En un turno con franjas oficiales cuenta las
+     * franjas que toca (el receso no suma); fuera de ellas, los minutos de reloj.
+     */
+    public function blockMinutes(TeacherAssignment $assignment, string $start, string $end): int
+    {
+        $group = $this->pedagogicalHours->groupOfShift($assignment->shift);
+
+        if ($group) {
+            $slots = array_filter(
+                $this->pedagogicalHours->slotsTouching($start, $end),
+                fn (array $slot) => $slot['group'] === $group
+            );
+            if ($slots !== []) {
+                return count($slots) * $this->minutesPerHour($assignment);
+            }
+        }
+
+        return $this->minutesBetween($start, $end);
     }
 
     /** Minutos que faltan para completar las horas semanales; null si la UD no tiene horas semanales. */
@@ -81,14 +120,14 @@ class ScheduleValidationService
             return null;
         }
 
-        return (int) round($weekly * 60) - $this->scheduledMinutes($assignment, $ignoreScheduleId);
+        return $this->weeklyMinutes($assignment) - $this->scheduledMinutes($assignment, $ignoreScheduleId);
     }
 
     /** true/false según el turno de la sección; null si la sección no tiene turno con horario. */
     public function isWithinShift(TeacherAssignment $assignment, string $start, string $end): ?bool
     {
         $shift = $assignment->shift;
-        if (!$shift || !$shift->start_time || !$shift->end_time) {
+        if (! $shift || ! $shift->start_time || ! $shift->end_time) {
             return null;
         }
 
@@ -106,17 +145,17 @@ class ScheduleValidationService
         }
 
         $shift = $assignment->shift;
-        if (!$shift || !$shift->start_time || !$shift->end_time) {
+        if (! $shift || ! $shift->start_time || ! $shift->end_time) {
             $warnings[] = 'El turno de la sección no tiene horario registrado.';
         }
 
         return $warnings;
     }
 
-    /** "4", "2.5", "1.25" */
-    public function formatHours(int $minutes): string
+    /** "4", "2.5", "1.25". $minutesPerHour: duración de la hora (60, o la pedagógica del turno). */
+    public function formatHours(int $minutes, int $minutesPerHour = 60): string
     {
-        return rtrim(rtrim(number_format($minutes / 60, 2, '.', ''), '0'), '.');
+        return rtrim(rtrim(number_format($minutes / max(1, $minutesPerHour), 2, '.', ''), '0'), '.');
     }
 
     private function weeklyHours(TeacherAssignment $assignment): float
@@ -163,7 +202,7 @@ class ScheduleValidationService
 
         // 1. Misma sección
         if ($s = $overlapping()->where('teacher_assignment_id', $assignment->id)->first()) {
-            return 'Esta sección ya tiene un bloque en ese día y rango: ' . $describe($s) . '.';
+            return 'Esta sección ya tiene un bloque en ese día y rango: '.$describe($s).'.';
         }
 
         // 2. Docente en otra sección (de cualquier programa)
@@ -171,7 +210,7 @@ class ScheduleValidationService
             ->where('teacher_assignment_id', '!=', $assignment->id)
             ->whereHas('teacherAssignment', fn ($q) => $q->where('teacher_id', $assignment->teacher_id))
             ->first()) {
-            return 'El docente ya tiene clase en ese horario: ' . $describe($s) . '.';
+            return 'El docente ya tiene clase en ese horario: '.$describe($s).'.';
         }
 
         // 3. Mismo grupo de estudiantes: programa + semestre + turno + sección
@@ -186,12 +225,12 @@ class ScheduleValidationService
                     ->where('semester', $unit->semester)
                     ->whereHas('module.studyPlan', fn ($p) => $p->where('career_id', $careerId))))
             ->first()) {
-            return "Los estudiantes del semestre {$unit->semester}, sección {$assignment->section} ya tienen otra clase en ese horario: " . $describe($s) . '.';
+            return "Los estudiantes del semestre {$unit->semester}, sección {$assignment->section} ya tienen otra clase en ese horario: ".$describe($s).'.';
         }
 
         // 4. Aula
         if ($classroomId && $s = $overlapping()->where('classroom_resource_id', $classroomId)->first()) {
-            return 'El aula ' . ($s->classroomResource->name ?? '') . ' ya está ocupada en ese horario: ' . $describe($s) . '.';
+            return 'El aula '.($s->classroomResource->name ?? '').' ya está ocupada en ese horario: '.$describe($s).'.';
         }
 
         return null;

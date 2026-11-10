@@ -41,6 +41,13 @@
                             {{ __('Dashboard') }}
                         </x-nav-link>
                         
+                        {{-- [NUEVO] Horario personal (solo usuarios con ficha de docente) --}}
+                        @if(Auth::user()->teacher)
+                            <x-nav-link href="{{ route('teacher.my-schedule') }}" :active="request()->routeIs('teacher.my-schedule')">
+                                {{ __('Mi Horario') }}
+                            </x-nav-link>
+                        @endif
+
                         @can('subir-silabo')
                             <x-nav-link href="{{ route('teacher.my-syllabi') }}" :active="request()->routeIs('teacher.my-syllabi')">
                                 {{ __('Mis Sílabos') }}
@@ -187,6 +194,13 @@
                     {{ __('Dashboard') }}
                 </x-responsive-nav-link>
                 
+                {{-- [NUEVO] Horario personal (solo usuarios con ficha de docente) --}}
+                @if(Auth::user()->teacher)
+                    <x-responsive-nav-link href="{{ route('teacher.my-schedule') }}" :active="request()->routeIs('teacher.my-schedule')">
+                        {{ __('Mi Horario') }}
+                    </x-responsive-nav-link>
+                @endif
+
                 @can('subir-silabo')
                     <x-responsive-nav-link href="{{ route('teacher.my-syllabi') }}" :active="request()->routeIs('teacher.my-syllabi')">
                         {{ __('Mis Sílabos') }}

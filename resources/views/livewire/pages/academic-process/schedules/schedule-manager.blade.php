@@ -85,7 +85,8 @@
                             $assignments = $this->teacherAssignments;
                             $current = $this->selectedAssignment;
                             $currentInfo = $current ? $assignments->firstWhere('id', $current->id) : null;
-                            $hoursOf = fn ($minutes) => app(\App\Services\ScheduleValidationService::class)->formatHours((int) $minutes);
+                            // [MODIFICADO] Las horas se muestran en horas pedagógicas del turno de la sección
+                            $hoursOf = fn ($minutes, $perHour = 60) => app(\App\Services\ScheduleValidationService::class)->formatHours((int) $minutes, (int) $perHour);
                             $dayLabels = ['monday' => 'Lunes', 'tuesday' => 'Martes', 'wednesday' => 'Miércoles', 'thursday' => 'Jueves', 'friday' => 'Viernes', 'saturday' => 'Sábado'];
                             // Paleta por sección (estilos en línea: no dependen del build de Tailwind)
                             $palette = [
@@ -109,7 +110,7 @@
                                     <div class="space-y-2">
                                         @foreach($assignments as $a)
                                             @php
-                                                $weeklyMin = (int) round(((float) ($a->didacticUnit->weekly_hours ?? 0)) * 60);
+                                                $weeklyMin = (int) $a->weekly_minutes;
                                                 $percent = $weeklyMin > 0 ? min(100, round($a->scheduled_minutes / $weeklyMin * 100)) : 0;
                                                 $over = $weeklyMin > 0 && $a->scheduled_minutes > $weeklyMin;
                                                 [$bg, $border, $text] = $colorOf($a->id);
@@ -120,7 +121,8 @@
                                                 <span class="font-semibold block">{{ $a->didacticUnit->name }}</span>
                                                 <span class="text-xs block">Semestre {{ $a->didacticUnit->semester }} · Sección {{ $a->section }} · {{ $a->shift->name ?? 'Sin turno' }}</span>
                                                 <span class="text-xs block mt-1">
-                                                    {{ $hoursOf($a->scheduled_minutes) }} / {{ $weeklyMin > 0 ? $hoursOf($weeklyMin) : '—' }} h
+                                                    {{ $hoursOf($a->scheduled_minutes, $a->minutes_per_hour) }} / {{ $weeklyMin > 0 ? $hoursOf($weeklyMin, $a->minutes_per_hour) : '—' }} h
+                                                    @if($a->minutes_per_hour !== 60)<span title="Hora pedagógica del turno">({{ $a->minutes_per_hour }} min)</span>@endif
                                                 </span>
                                                 @if($weeklyMin > 0)
                                                     <span class="block h-1.5 bg-white rounded mt-1"><span class="block h-1.5 rounded" style="width: {{ $percent }}%; background: {{ $over ? '#dc2626' : $border }};"></span></span>
@@ -149,8 +151,9 @@
                                             <div>
                                                 <x-label value="Día" />
                                                 <select wire:model="day_of_week" class="w-full border-gray-300 rounded-md">
-                                                    @foreach($dayLabels as $key => $label)
-                                                        <option value="{{ $key }}">{{ $label }}</option>
+                                                    {{-- [MODIFICADO] Solo lunes a viernes --}}
+                                                    @foreach(\App\Services\ScheduleValidationService::DAYS as $key)
+                                                        <option value="{{ $key }}">{{ $dayLabels[$key] }}</option>
                                                     @endforeach
                                                 </select>
                                             </div>
@@ -176,6 +179,17 @@
                                                 </button>
                                             @endif
 
+                                            {{-- [NUEVO] Tipo de bloque: se imprime como (T)/(P) en los horarios oficiales --}}
+                                            <div>
+                                                <x-label value="Tipo (opcional)" />
+                                                <select wire:model="session_type" class="w-full border-gray-300 rounded-md text-sm">
+                                                    <option value="">-- Sin indicar --</option>
+                                                    <option value="T">Teoría (T)</option>
+                                                    <option value="P">Práctica (P)</option>
+                                                </select>
+                                                <x-input-error for="session_type" />
+                                            </div>
+
                                             <div>
                                                 <x-label value="Aula (opcional)" />
                                                 <select wire:model="classroom_resource_id" class="w-full border-gray-300 rounded-md text-sm">
@@ -189,7 +203,8 @@
 
                                             <div class="text-xs rounded p-2 border bg-gray-50 border-gray-200 text-gray-700">
                                                 @if($currentInfo && $currentInfo->remaining_minutes !== null)
-                                                    Quedan {{ $hoursOf(max(0, $currentInfo->remaining_minutes)) }} h de {{ $hoursOf(round($current->didacticUnit->weekly_hours * 60)) }} h semanales.
+                                                    Quedan {{ $hoursOf(max(0, $currentInfo->remaining_minutes), $currentInfo->minutes_per_hour) }} h de {{ $hoursOf($currentInfo->weekly_minutes, $currentInfo->minutes_per_hour) }} h semanales
+                                                    @if($currentInfo->minutes_per_hour !== 60)(horas de {{ $currentInfo->minutes_per_hour }} min)@endif.
                                                 @endif
                                                 @foreach($currentInfo->warnings ?? [] as $warning)
                                                     <span class="block text-amber-700">{{ $warning }}</span>
@@ -226,7 +241,7 @@
                                         </div>
                                     </div>
 
-                                    <div class="min-w-[900px]" style="display: grid; grid-template-columns: 56px repeat(6, minmax(0, 1fr)); gap: 6px;">
+                                    <div class="min-w-[900px]" style="display: grid; grid-template-columns: 56px repeat({{ count($grid['days']) }}, minmax(0, 1fr)); gap: 6px;">
                                         <div></div>
                                         @foreach($grid['days'] as $day)
                                             <div class="text-center font-bold bg-indigo-50 p-2 rounded text-sm text-gray-700">{{ $dayLabels[$day] }}</div>
@@ -259,7 +274,7 @@
                                                             @if($b['out_of_shift'])<span title="Fuera del turno de la sección">⚠</span>@endif
                                                             {{ $b['start'] }}–{{ $b['end'] }}
                                                         </div>
-                                                        <div class="truncate">{{ $b['unit'] }} · {{ $b['section'] }}</div>
+                                                        <div class="truncate">{{ $b['unit'] }}@if($b['session_type']) ({{ $b['session_type'] }})@endif · {{ $b['section'] }}</div>
                                                         <div class="truncate opacity-75">{{ $b['editable'] ? ($b['classroom'] ?? 'Sin aula') : $b['program'] }}</div>
                                                     </div>
                                                 @endforeach

@@ -54,6 +54,9 @@
                                         <div class="flex flex-col">
                                             <span>{{ $unit->credits }} Créditos</span>
                                             <span class="text-xs">{{ $unit->weekly_hours }} hrs/sem - {{ $unit->total_hours }} total</span>
+                                            @if($unit->theory_hours !== null && $unit->practice_hours !== null)
+                                                <span class="text-xs">T {{ $unit->theory_hours }} · P {{ $unit->practice_hours }}</span>
+                                            @endif
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
@@ -175,6 +178,19 @@
                     <x-label for="weekly_hours" value="Horas Semanales" />
                     <x-input id="weekly_hours" type="number" class="mt-1 block w-full" wire:model="weekly_hours" min="1" />
                     <x-input-error for="weekly_hours" class="mt-2" />
+                </div>
+
+                {{-- [NUEVO] Desglose para el horario personal del docente --}}
+                <div class="md:col-span-3">
+                    <x-label for="theory_hours" value="Horas Teoría (opcional)" />
+                    <x-input id="theory_hours" type="number" class="mt-1 block w-full" wire:model="theory_hours" min="0" />
+                    <x-input-error for="theory_hours" class="mt-2" />
+                </div>
+
+                <div class="md:col-span-3">
+                    <x-label for="practice_hours" value="Horas Práctica (opcional)" />
+                    <x-input id="practice_hours" type="number" class="mt-1 block w-full" wire:model="practice_hours" min="0" />
+                    <x-input-error for="practice_hours" class="mt-2" />
                 </div>
 
                 <div class="md:col-span-3">

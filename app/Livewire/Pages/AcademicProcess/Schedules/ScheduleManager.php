@@ -46,6 +46,7 @@ class ScheduleManager extends Component
     public $day_of_week = 'monday';
     public $start_time = '';
     public $end_time = '';
+    public $session_type = ''; // [NUEVO] 'T' teoría | 'P' práctica | '' sin indicar
     public $editingScheduleId = null;
 
     // Colecciones
@@ -197,6 +198,9 @@ class ScheduleManager extends Component
             ->each(function (TeacherAssignment $a) use ($validator) {
                 $a->scheduled_minutes = $validator->scheduledMinutes($a);
                 $a->remaining_minutes = $validator->remainingMinutes($a);
+                // [NUEVO] Horas pedagógicas del turno (45/40 min) para mostrar el avance
+                $a->minutes_per_hour = $validator->minutesPerHour($a);
+                $a->weekly_minutes = $validator->weeklyMinutes($a);
                 $a->warnings = $validator->warnings($a);
             })
             ->values();
@@ -244,8 +248,14 @@ class ScheduleManager extends Component
                     $end = $s->end_time->format('H:i');
                     $widen($start, $end);
 
+                    // [MODIFICADO] Ya no se programa en sábado, pero un bloque antiguo de ese día
+                    // se sigue mostrando para poder corregirlo o eliminarlo.
                     if (!isset($grid['blocks'][$s->day_of_week])) {
-                        continue;
+                        if ($s->day_of_week !== 'saturday') {
+                            continue;
+                        }
+                        $grid['days'][] = 'saturday';
+                        $grid['blocks']['saturday'] = [];
                     }
 
                     $grid['blocks'][$s->day_of_week][] = [
@@ -256,6 +266,7 @@ class ScheduleManager extends Component
                         'classroom' => $s->classroomResource->name ?? null,
                         'start' => $start,
                         'end' => $end,
+                        'session_type' => $s->session_type,
                         'editable' => $career && (int) $career->id === (int) $this->selectedCareerId,
                         'program' => $career->name ?? '',
                         'out_of_shift' => $validator->isWithinShift($a, $start, $end) === false,
@@ -304,6 +315,7 @@ class ScheduleManager extends Component
         $this->start_time = $schedule->start_time->format('H:i');
         $this->end_time = $schedule->end_time->format('H:i');
         $this->classroom_resource_id = $schedule->classroom_resource_id ?? '';
+        $this->session_type = $schedule->session_type ?? '';
         $this->resetValidation();
 
         // [NUEVO] Si el aula del bloque ya no está disponible, no figura en el select:
@@ -343,6 +355,7 @@ class ScheduleManager extends Component
         $this->start_time = '';
         $this->end_time = '';
         $this->classroom_resource_id = '';
+        $this->session_type = '';
         $this->resetValidation();
     }
 
@@ -370,6 +383,7 @@ class ScheduleManager extends Component
             'start_time'            => 'required|date_format:H:i',
             'end_time'              => 'required|date_format:H:i|after:start_time',
             'classroom_resource_id' => 'nullable|exists:classroom_resources,id',
+            'session_type'          => 'nullable|in:T,P',
         ]);
 
         $editing = null;
@@ -394,6 +408,7 @@ class ScheduleManager extends Component
             'start_time'            => TimeCast::normalize($this->start_time),
             'end_time'              => TimeCast::normalize($this->end_time),
             'classroom_resource_id' => $classroomId,
+            'session_type'          => $this->session_type ?: null,
         ];
 
         $editing ? $editing->update($data) : Schedule::create($data);

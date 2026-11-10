@@ -18,8 +18,9 @@ class Schedule extends Model
         'day_of_week',
         'start_time',
         'end_time',
+        'session_type', // [NUEVO] 'T' teoría | 'P' práctica | null
     ];
-    
+
     // [CORREGIDO] Con 'string' las horas llegaban como texto y ->format('H:i') fallaba
     // en la gestión de horarios, reportes, matrícula, asistencias y visor público.
     protected $casts = [

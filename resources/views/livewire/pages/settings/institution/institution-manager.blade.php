@@ -39,6 +39,26 @@
                                     <x-input-error for="logoUpload" class="mt-2" />
                                     <div wire:loading wire:target="logoUpload" class="text-sm text-gray-500 mt-1">Cargando...</div>
                                 </div>
+
+                                {{-- [NUEVO] Encabezado de los horarios oficiales --}}
+                                <h3 class="mt-8 text-lg font-medium text-gray-900">Encabezado para horarios</h3>
+                                <p class="mt-1 text-sm text-gray-600">Imagen horizontal (JPG o PNG, máx. 2 MB) que se imprime en la parte superior izquierda del horario personal del docente. Si no se sube ninguna, se usa la de la plantilla oficial.</p>
+                                <div class="mt-4">
+                                    @if ($scheduleHeaderUpload)
+                                        <img src="{{ $scheduleHeaderUpload->temporaryUrl() }}" alt="Vista previa del encabezado" class="w-full max-h-24 object-contain rounded-md border bg-gray-100">
+                                    @elseif ($schedule_header_url)
+                                        <img src="{{ asset('storage/' . $schedule_header_url) }}" alt="Encabezado actual" class="w-full max-h-24 object-contain rounded-md border bg-gray-100">
+                                    @else
+                                        <div class="w-full h-16 bg-gray-100 rounded-md flex items-center justify-center text-sm text-gray-500">
+                                            Se usa el encabezado de la plantilla
+                                        </div>
+                                    @endif
+                                </div>
+                                <div class="mt-4">
+                                    <x-input id="scheduleHeaderUpload" type="file" accept="image/png,image/jpeg" class="mt-1 block w-full" wire:model="scheduleHeaderUpload" />
+                                    <x-input-error for="scheduleHeaderUpload" class="mt-2" />
+                                    <div wire:loading wire:target="scheduleHeaderUpload" class="text-sm text-gray-500 mt-1">Cargando...</div>
+                                </div>
                             </div>
 
                             <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">

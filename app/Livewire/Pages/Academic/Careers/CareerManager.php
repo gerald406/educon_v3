@@ -25,6 +25,7 @@ class CareerManager extends Component
     public int|string $institution_id = '';
     public string $code = '';
     public string $name = '';
+    public $short_name = ''; // [NUEVO] Nombre corto para horarios
     public int $duration_semesters = 6;
     public string $degree_awarded = '';
     public string $authorization_resolution = '';
@@ -64,6 +65,7 @@ class CareerManager extends Component
                     ->ignore($this->editingCareer?->id),
             ],
             'name' => ['required', 'string', 'max:150'],
+            'short_name' => ['nullable', 'string', 'max:60'],
             'duration_semesters' => ['required', 'integer', 'min:2', 'max:10'],
             'degree_awarded' => ['nullable', 'string', 'max:200'],
             'authorization_resolution' => ['nullable', 'string', 'max:50'],
@@ -77,6 +79,7 @@ class CareerManager extends Component
             'institution_id' => 'institución',
             'code' => 'código',
             'duration_semesters' => 'duración',
+            'short_name' => 'nombre corto',
         ];
     }
 
@@ -97,6 +100,7 @@ class CareerManager extends Component
         $this->institution_id = $career->institution_id;
         $this->code = $career->code;
         $this->name = $career->name;
+        $this->short_name = $career->short_name ?? '';
         $this->duration_semesters = $career->duration_semesters;
         $this->degree_awarded = $career->degree_awarded;
         $this->authorization_resolution = $career->authorization_resolution;
@@ -110,6 +114,7 @@ class CareerManager extends Component
     {
         $this->authorize('gestionar-estructura-academica');
         $validated = $this->validate();
+        $validated['short_name'] = trim((string) ($validated['short_name'] ?? '')) ?: null;
 
         try {
             if ($this->editingCareer) {
@@ -185,6 +190,7 @@ class CareerManager extends Component
         $this->editingCareer = null;
         $this->code = '';
         $this->name = '';
+        $this->short_name = '';
         $this->degree_awarded = '';
         $this->authorization_resolution = '';
         $this->status = 'active';

@@ -89,6 +89,14 @@ Roles: `Administrador`, `Coordinador`, `Docente`, `Estudiante`, `Secretario Acad
 - `ScheduleManager::resolveAssignment()` revalida en servidor toda sección/bloque (período activo + `active` + docente + programa seleccionados); no confiar en ids del formulario. `teacher_assignments.status` ∈ `active|suspended|completed`.
 - Exportaciones (`schedules/export*`) exigen `permission:gestionar-horarios`; los consolidados validan parámetros y, como la vista consolidada y "Reiniciar semestre", solo consideran secciones `active`.
 
+### Horas pedagógicas y horario personal del docente (`teacher/my-schedule`)
+- Decisiones del usuario en `docs/archivos/DUDAS_IMPLEMENTACION_HORARIOS_DOCENTES.txt` (apartados A y B respondidos; C–F —horario no lectivo y Programación de Actividades en Word— **pendientes**: no implementarlos sin sus respuestas).
+- `PedagogicalHourService::GROUPS` = franjas oficiales (filas de las plantillas): mañana 6 × 45 min (08:00–13:00, receso 11:00–11:30) y noche 6 × 40 min (17:00–21:00). Una hora semanal de la UD = una franja del turno de la sección; `ScheduleValidationService::blockMinutes()` cuenta las franjas que toca el bloque (el receso no suma) y `weeklyMinutes()` usa 45/40 min. Un turno que no empieza dentro de una jornada conserva la hora de 60 min. `formatHours($min, $minutosPorHora)`.
+- No se programa en sábado (`ScheduleValidationService::DAYS` = lunes a viernes); un bloque antiguo de sábado se sigue mostrando en la grilla por docente para poder corregirlo.
+- Datos opcionales (nullable) que alimentan los documentos: `didactic_units.theory_hours`/`practice_hours` (si se registran deben sumar `weekly_hours`), `schedules.session_type` (`T`/`P`), `careers.short_name` (si falta se usa el nombre completo) e `institutions.schedule_header_url` (encabezado izquierdo del Excel; si falta queda el de la plantilla).
+- `TeacherPersonalScheduleService::build($teacher, $period)` arma filas, grilla por franjas, total (= suma de `weekly_hours` de la carga `active`) y avisos; lo usan `Teacher/MySchedule` (solo consulta) y `Exports/TeacherPersonalScheduleExport`. Este último **no** es un export de maatwebsite: rellena `resources/templates/horario_personal.xlsx` (copia vacía de la plantilla oficial; debe desplegarse) con PhpSpreadsheet para conservar logos, pie de firmas y fórmulas, y fuerza una sola página.
+- `Teacher/TeacherDocumentController` no recibe ids: siempre `Auth::user()->teacher` + período activo (404 si el usuario no tiene ficha de docente). Mantener ese criterio en los documentos que se agreguen.
+
 ### Reportes
 - Excel: clases en `app/Exports` con `FromCollection, WithHeadings, WithMapping, ShouldAutoSize, WithStyles, WithTitle`; se descargan desde un método Livewire (`return Excel::download(...)`) o desde un controlador.
 - PDF: DomPDF en controladores con vistas en `resources/views/reports/**`.

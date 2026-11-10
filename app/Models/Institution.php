@@ -22,6 +22,7 @@ class Institution extends Model
         'email',
         'website',
         'logo_url',
+        'schedule_header_url', // [NUEVO] Encabezado de los horarios oficiales
         'status',
     ];
 
@@ -32,6 +33,4 @@ class Institution extends Model
     {
         return $this->hasMany(AcademicYear::class);
     }
-
-    
 }

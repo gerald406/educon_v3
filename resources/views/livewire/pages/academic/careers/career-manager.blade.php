@@ -127,6 +127,14 @@
                     <x-input-error for="name" class="mt-2" />
                 </div>
 
+                {{-- [NUEVO] Se imprime en las celdas de los horarios oficiales --}}
+                <div class="col-span-1 md:col-span-2">
+                    <x-label for="short_name" value="Nombre corto para horarios (Opcional)" />
+                    <x-input id="short_name" type="text" class="mt-1 block w-full" wire:model="short_name" maxlength="60" placeholder="Ej. Electricidad Ind." />
+                    <p class="text-xs text-gray-500 mt-1">Si se deja vacío, los horarios muestran el nombre completo del programa.</p>
+                    <x-input-error for="short_name" class="mt-2" />
+                </div>
+
                 <div class="col-span-1 md:col-span-2">
                     <x-label for="degree_awarded" value="Título Otorgado (Opcional)" />
                     <x-input id="degree_awarded" type="text" class="mt-1 block w-full" wire:model="degree_awarded" />

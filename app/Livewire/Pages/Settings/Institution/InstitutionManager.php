@@ -30,6 +30,10 @@ class InstitutionManager extends Component
     // Para la subida de archivos
     public $logoUpload; // Propiedad temporal para el archivo
 
+    // [NUEVO] Encabezado de los horarios oficiales (Excel del horario personal)
+    public $schedule_header_url = '';
+    public $scheduleHeaderUpload;
+
     /**
      * Hook 'mount': Carga la institución principal.
      */
@@ -43,6 +47,7 @@ class InstitutionManager extends Component
                 'code', 'name', 'tax_id', 'address', 'phone', 
                 'email', 'website', 'logo_url', 'status'
             ));
+            $this->schedule_header_url = $this->institution->schedule_header_url ?? '';
         } else {
             // Manejo de error si no se encuentra la institución
             $this->dispatch('swal', [
@@ -66,6 +71,8 @@ class InstitutionManager extends Component
             'website' => 'nullable|url|max:255',
             'status' => 'required|in:active,inactive',
             'logoUpload' => 'nullable|image|max:2048', // 2MB Max
+            // [NUEVO] Solo JPG/PNG: son los formatos que acepta el encabezado de Excel
+            'scheduleHeaderUpload' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
             // Reglas 'unique' que ignoran el ID actual
             'code' => [
                 'required',
@@ -107,6 +114,15 @@ class InstitutionManager extends Component
                 $data['logo_url'] = $path;
             }
 
+            // [NUEVO] Encabezado para horarios
+            if ($this->scheduleHeaderUpload) {
+                if ($this->institution->schedule_header_url) {
+                    Storage::disk('public')->delete($this->institution->schedule_header_url);
+                }
+                $data['schedule_header_url'] = $this->scheduleHeaderUpload->store('logos', 'public');
+            }
+            unset($data['logoUpload'], $data['scheduleHeaderUpload']);
+
             $this->institution->update($data);
 
             $this->dispatch('swal', [
@@ -115,6 +131,7 @@ class InstitutionManager extends Component
                 'text' => 'Datos de la institución actualizados.',
             ]);
             
+            $this->reset('logoUpload', 'scheduleHeaderUpload');
             // Recargar los datos (especialmente la URL del logo)
             $this->mount();
 

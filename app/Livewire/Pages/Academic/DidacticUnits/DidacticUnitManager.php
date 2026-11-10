@@ -26,6 +26,9 @@ class DidacticUnitManager extends Component
     public $name = '';
     public $semester = 1;
     public $weekly_hours = 0;
+    // [NUEVO] Desglose opcional de las horas semanales (horario personal del docente)
+    public $theory_hours = '';
+    public $practice_hours = '';
     public $total_hours = 0;
     public $credits = 0;
     public $unit_type = 'career';
@@ -61,11 +64,30 @@ class DidacticUnitManager extends Component
             'name' => 'required|string|max:200',
             'semester' => 'required|integer|min:1|max:8',
             'weekly_hours' => 'required|integer|min:1',
+            // [NUEVO] Opcionales; si se registran, ambas y deben sumar las horas semanales
+            'theory_hours' => ['nullable', 'integer', 'min:0', 'max:255', 'required_with:practice_hours'],
+            'practice_hours' => [
+                'nullable', 'integer', 'min:0', 'max:255', 'required_with:theory_hours',
+                function ($attribute, $value, $fail) {
+                    if (is_numeric($this->theory_hours) && is_numeric($value) && is_numeric($this->weekly_hours)
+                        && (int) $this->theory_hours + (int) $value !== (int) $this->weekly_hours) {
+                        $fail('Las horas de teoría y práctica deben sumar las horas semanales (' . (int) $this->weekly_hours . ').');
+                    }
+                },
+            ],
             'total_hours' => 'required|integer|min:1',
             'credits' => 'required|integer|min:1',
             'unit_type' => 'required|in:career,transversal',
             'semester_order' => 'required|integer',
             'status' => 'required|in:active,inactive',
+        ];
+    }
+
+    public function validationAttributes()
+    {
+        return [
+            'theory_hours' => 'horas de teoría',
+            'practice_hours' => 'horas de práctica',
         ];
     }
 
@@ -113,6 +135,8 @@ class DidacticUnitManager extends Component
         $this->name = $unit->name;
         $this->semester = $unit->semester;
         $this->weekly_hours = $unit->weekly_hours;
+        $this->theory_hours = $unit->theory_hours ?? '';
+        $this->practice_hours = $unit->practice_hours ?? '';
         $this->total_hours = $unit->total_hours;
         $this->credits = $unit->credits;
         $this->unit_type = $unit->unit_type;
@@ -127,6 +151,11 @@ class DidacticUnitManager extends Component
     {
         $this->authorize('gestionar-estructura-academica');
         $validated = $this->validate();
+
+        // [NUEVO] Campos numéricos opcionales: vacío => NULL
+        foreach (['theory_hours', 'practice_hours'] as $field) {
+            $validated[$field] = is_numeric($validated[$field] ?? null) ? (int) $validated[$field] : null;
+        }
 
         try {
             if ($this->editingUnit) {
@@ -172,6 +201,8 @@ class DidacticUnitManager extends Component
         $this->code = '';
         $this->name = '';
         $this->semester = 1;
+        $this->theory_hours = '';
+        $this->practice_hours = '';
         $this->status = 'active';
     }
 

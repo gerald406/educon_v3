@@ -14,13 +14,14 @@ class DidacticUnit extends Model
     protected $appends = ['name_with_semester'];
     // $units = DidacticUnit::all()->append('name_with_semester');
 
-
     protected $fillable = [
         'module_id',
         'code',
         'name',
         'semester',
         'weekly_hours',
+        'theory_hours',   // [NUEVO] Desglose de las horas semanales
+        'practice_hours', // [NUEVO]
         'total_hours',
         'credits',
         'unit_type',

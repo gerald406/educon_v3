@@ -292,12 +292,72 @@ class ScheduleManagerTest extends TestCase
         $a = $this->section($this->unit());
 
         $component = $this->managerForTeacher()->call('selectAssignment', $a->id);
-        $this->fillBlock($component, 'monday', '08:00', '10:00')
+        // Turno de mañana: horas pedagógicas de 45 min (08:00-09:30 = 2 h de las 4 h)
+        $this->fillBlock($component, 'monday', '08:00', '09:30')
             ->call('saveSchedule')
             ->assertDispatched('swal', fn ($e, $p) => ($p[0]['icon'] ?? null) === 'success')
             ->assertSee('Quedan 2 h');
 
         $this->assertSame(1, Schedule::where('teacher_assignment_id', $a->id)->count());
+    }
+
+    // [NUEVO] Tipo de bloque (T/P) y programación solo de lunes a viernes
+
+    public function test_save_stores_session_type_and_edit_loads_it(): void
+    {
+        $a = $this->section($this->unit());
+
+        $component = $this->managerForTeacher()->call('selectAssignment', $a->id);
+        $this->fillBlock($component, 'monday', '08:00', '09:30')
+            ->set('session_type', 'P')
+            ->call('saveSchedule')
+            ->assertSet('session_type', '');
+
+        $block = Schedule::where('teacher_assignment_id', $a->id)->firstOrFail();
+        $this->assertSame('P', $block->session_type);
+
+        $component->call('editSchedule', $block->id)->assertSet('session_type', 'P');
+    }
+
+    public function test_save_rejects_invalid_session_type(): void
+    {
+        $a = $this->section($this->unit());
+
+        $component = $this->managerForTeacher()->call('selectAssignment', $a->id);
+        $this->fillBlock($component, 'monday', '08:00', '09:30')
+            ->set('session_type', 'X')
+            ->call('saveSchedule')
+            ->assertHasErrors('session_type');
+
+        $this->assertSame(0, Schedule::count());
+    }
+
+    public function test_save_rejects_saturday(): void
+    {
+        $a = $this->section($this->unit());
+
+        $component = $this->managerForTeacher()->call('selectAssignment', $a->id);
+        $this->fillBlock($component, 'saturday', '08:00', '09:30')
+            ->call('saveSchedule')
+            ->assertHasErrors('day_of_week');
+
+        $this->assertSame(0, Schedule::count());
+    }
+
+    public function test_existing_saturday_block_is_still_shown_in_grid(): void
+    {
+        $a = $this->section($this->unit());
+        $this->block($a, 'saturday', '08:00', '08:45');
+
+        $this->managerForTeacher()->assertSee('Sábado');
+    }
+
+    public function test_grid_has_no_saturday_column_without_saturday_blocks(): void
+    {
+        $a = $this->section($this->unit());
+        $this->block($a, 'monday', '08:00', '08:45');
+
+        $this->managerForTeacher()->assertDontSee('Sábado');
     }
 
     public function test_save_rejects_block_outside_shift(): void
