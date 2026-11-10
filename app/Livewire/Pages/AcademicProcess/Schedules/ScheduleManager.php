@@ -11,49 +11,48 @@ use App\Models\Schedule;
 use App\Models\Shift;
 use App\Models\Teacher;
 use App\Models\TeacherAssignment;
+use App\Services\ScheduleValidationService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Support\Collection;
-use Livewire\Attributes\Layout;
 use Livewire\Attributes\Computed;
+use Livewire\Attributes\Layout;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
+/**
+ * [MODIFICADO] Gestión de horarios por docente:
+ * programa → docente (con carga académica en el programa) → grilla completa del docente
+ * → UD asignadas en el programa → bloques. Las reglas (turno, horas semanales y cruces)
+ * viven en ScheduleValidationService; todo id del formulario se vuelve a resolver en el servidor.
+ */
 #[Layout('layouts.app')]
 class ScheduleManager extends Component
 {
-    use AuthorizesRequests; // [NUEVO]
-
-    // [NUEVO] Días programables (orden de la grilla)
-    private const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    use AuthorizesRequests;
 
     // ==========================================
-    // PROPIEDADES - GESTIÓN DE HORARIOS
+    // PROPIEDADES - GESTIÓN POR DOCENTE
     // ==========================================
 
     public ?AcademicPeriod $activePeriod = null;
 
-    // Filtros de selección
+    // Selección: programa → docente → sección (asignación de la carga académica)
     public $selectedCareerId = '';
-    public $searchUnit = '';
-    public $unitResults = [];
-    public $selectedUnitId = '';
-    public $selectedUnitName = '';
+    public $selectedTeacherId = '';
     public $selectedAssignmentId = '';
-    public ?TeacherAssignment $selectedAssignment = null;
 
-    // Formulario de horario
+    // Formulario de bloque
     public $classroom_resource_id = '';
     public $day_of_week = 'monday';
     public $start_time = '';
     public $end_time = '';
-    public $editingScheduleId = null; // [NUEVO] Bloque en edición
+    public $editingScheduleId = null;
 
     // Colecciones
     public Collection $careers;
     public Collection $classrooms;
     public Collection $shifts;
-    public Collection $teachers;
-    public Collection $currentSchedules;
-    public Collection $sectionAssignments;
+    public Collection $teachers; // Modal de exportación
 
     // ==========================================
     // PROPIEDADES - EXPORTACIÓN (SIMPLIFICADO)
@@ -72,7 +71,7 @@ class ScheduleManager extends Component
     // ==========================================
     // PROPIEDADES - VISTA CONSOLIDADA
     // ==========================================
-    public $viewMode = 'unit'; // 'unit' (actual) o 'consolidated'
+    public $viewMode = 'teacher'; // [MODIFICADO] 'teacher' (por docente) o 'consolidated'
     public $filterCycleId = ''; // Semestre o Ciclo seleccionado
     public $filterShiftId = ''; // Turno seleccionado
 
@@ -100,187 +99,206 @@ class ScheduleManager extends Component
             ->where('status', 'active')
             ->get()
             ->sortBy('user.lastname');
+    }
 
-        $this->currentSchedules = collect();
-        $this->sectionAssignments = collect();
+    private function validator(): ScheduleValidationService
+    {
+        return app(ScheduleValidationService::class);
     }
 
     // ==========================================
-    // GESTIÓN DE HORARIOS (Sin cambios)
+    // [NUEVO] SELECCIÓN: PROGRAMA → DOCENTE → SECCIÓN
     // ==========================================
 
     public function updatedSelectedCareerId()
     {
-        $this->resetUnitSearch();
+        $this->selectedTeacherId = '';
+        $this->clearAssignment();
     }
 
-    public function updatedSearchUnit($value)
+    public function updatedSelectedTeacherId($value)
     {
-        // [CORREGIDO] Al escribir otro curso se descarta la selección anterior.
-        // Antes el curso/sección previos seguían seleccionados y los bloques
-        // se registraban (o eliminaban) en la sección equivocada.
-        $this->clearSelection();
+        $this->clearAssignment();
 
-        if (strlen($value) < 2 || !$this->selectedCareerId) {
-            $this->unitResults = [];
-            return;
+        // Solo docentes con carga en el programa seleccionado
+        if ($value && !$this->programTeachers->contains('id', (int) $value)) {
+            $this->selectedTeacherId = '';
         }
+    }
 
-        $this->unitResults = DidacticUnit::whereHas(
-            'module.studyPlan',
-            fn($q) => $q->where('career_id', $this->selectedCareerId)
-        )
-            ->where('name', 'like', '%' . $value . '%')
+    private function clearAssignment(): void
+    {
+        $this->selectedAssignmentId = '';
+        $this->resetBlockForm();
+        unset($this->teacherGrid, $this->teacherAssignments, $this->selectedAssignment);
+    }
+
+    /** Asignaciones activas del período activo cuyas UD pertenecen al programa seleccionado. */
+    private function programAssignmentsQuery()
+    {
+        return TeacherAssignment::query()
+            ->where('academic_period_id', $this->activePeriod?->id)
             ->where('status', 'active')
-            ->orderBy('semester')
-            ->take(10)
-            ->get();
-    }
-
-    // [MODIFICADO] Recibe solo el id: el nombre se lee de la BD (los nombres con apóstrofo rompían el wire:click)
-    public function selectUnit($id)
-    {
-        $unit = DidacticUnit::whereHas(
-            'module.studyPlan',
-            fn($q) => $q->where('career_id', $this->selectedCareerId)
-        )->find($id);
-
-        $this->clearSelection();
-        $this->unitResults = [];
-
-        if (!$unit) {
-            $this->searchUnit = '';
-            return;
-        }
-
-        $this->selectedUnitId = $unit->id;
-        $this->searchUnit = $unit->name;
-        $this->selectedUnitName = "Semestre {$unit->semester} - {$unit->name}";
-        $this->loadAssignments();
-    }
-
-    private function resetUnitSearch()
-    {
-        $this->searchUnit = '';
-        $this->unitResults = [];
-        $this->clearSelection();
+            ->whereHas('didacticUnit.module.studyPlan', fn ($q) => $q->where('career_id', $this->selectedCareerId));
     }
 
     /**
-     * [NUEVO] Limpia curso, sección, bloques cargados y el formulario.
+     * Vuelve a resolver la sección en el servidor: período activo, activa,
+     * del docente seleccionado y con UD del programa seleccionado.
      */
-    private function clearSelection(): void
+    private function resolveAssignment($id): ?TeacherAssignment
     {
-        $this->selectedUnitId = '';
-        $this->selectedUnitName = '';
-        $this->selectedAssignmentId = '';
-        $this->selectedAssignment = null;
-        $this->sectionAssignments = collect();
-        $this->currentSchedules = collect();
-        $this->resetBlockForm();
-    }
-
-    public function loadAssignments()
-    {
-        // [CORREGIDO] Siempre se parte de cero: la sección del curso anterior no debe quedar seleccionada
-        $this->selectedAssignmentId = '';
-        $this->selectedAssignment = null;
-        $this->sectionAssignments = collect();
-        $this->currentSchedules = collect();
-
-        if ($this->selectedUnitId && $this->activePeriod) {
-            $this->sectionAssignments = TeacherAssignment::with(['teacher.user', 'shift'])
-                ->where('academic_period_id', $this->activePeriod->id)
-                ->where('didactic_unit_id', $this->selectedUnitId)
-                ->where('status', 'active')
-                ->orderBy('section')
-                ->get();
-
-            if ($this->sectionAssignments->count() === 1) {
-                $this->selectedAssignmentId = $this->sectionAssignments->first()->id;
-                $this->updatedSelectedAssignmentId($this->selectedAssignmentId);
-            }
-        }
-    }
-
-    public function updatedSelectedAssignmentId($value)
-    {
-        $this->resetBlockForm();
-        $this->selectedAssignment = $value ? $this->findSelectableAssignment($value) : null;
-
-        if ($this->selectedAssignment) {
-            $this->loadSchedules();
-        } else {
-            $this->selectedAssignmentId = '';
-            $this->currentSchedules = collect();
-        }
-    }
-
-    /**
-     * [NUEVO] La sección debe ser del curso seleccionado y del periodo activo.
-     */
-    private function findSelectableAssignment($id): ?TeacherAssignment
-    {
-        if (!$this->activePeriod || !$this->selectedUnitId) {
+        if (!$id || !$this->activePeriod || !$this->selectedCareerId || !$this->selectedTeacherId) {
             return null;
         }
 
-        return TeacherAssignment::with(['teacher.user', 'didacticUnit.module.studyPlan', 'shift'])
-            ->where('academic_period_id', $this->activePeriod->id)
-            ->where('didactic_unit_id', $this->selectedUnitId)
-            ->where('status', 'active')
+        return $this->programAssignmentsQuery()
+            ->where('teacher_id', $this->selectedTeacherId)
+            ->with(['didacticUnit.module.studyPlan', 'shift'])
             ->find($id);
     }
 
-    public function loadSchedules()
+    /** Docentes con carga académica en el programa (con el número de secciones). */
+    #[Computed]
+    public function programTeachers(): Collection
     {
-        if ($this->selectedAssignment) {
-            // [MODIFICADO] Orden por día en PHP (FIELD() es exclusivo de MySQL)
-            $this->currentSchedules = $this->selectedAssignment->schedules()
-                ->with('classroomResource')
-                ->get()
-                ->sortBy(fn ($s) => sprintf('%d-%s', array_search($s->day_of_week, self::DAYS, true), $s->start_time->format('H:i')))
-                ->values();
+        if (!$this->activePeriod || !$this->selectedCareerId) {
+            return collect();
         }
+
+        $counts = $this->programAssignmentsQuery()
+            ->selectRaw('teacher_id, count(*) as total')
+            ->groupBy('teacher_id')
+            ->pluck('total', 'teacher_id');
+
+        return Teacher::with('user')
+            ->whereIn('id', $counts->keys())
+            ->get()
+            ->each(fn (Teacher $t) => $t->assignments_count = (int) $counts[$t->id])
+            ->sortBy(fn (Teacher $t) => mb_strtolower(($t->user->lastname ?? '') . ' ' . ($t->user->name ?? '')))
+            ->values();
+    }
+
+    /** Secciones del docente en el programa, con minutos programados y restantes. */
+    #[Computed]
+    public function teacherAssignments(): Collection
+    {
+        if (!$this->activePeriod || !$this->selectedCareerId || !$this->selectedTeacherId) {
+            return collect();
+        }
+
+        $validator = $this->validator();
+
+        return $this->programAssignmentsQuery()
+            ->where('teacher_id', $this->selectedTeacherId)
+            ->with(['didacticUnit', 'shift'])
+            ->get()
+            ->sortBy(fn ($a) => sprintf('%02d-%s-%s', $a->didacticUnit->semester ?? 0, $a->didacticUnit->name ?? '', $a->section))
+            ->each(function (TeacherAssignment $a) use ($validator) {
+                $a->scheduled_minutes = $validator->scheduledMinutes($a);
+                $a->remaining_minutes = $validator->remainingMinutes($a);
+                $a->warnings = $validator->warnings($a);
+            })
+            ->values();
+    }
+
+    #[Computed]
+    public function selectedAssignment(): ?TeacherAssignment
+    {
+        return $this->resolveAssignment($this->selectedAssignmentId);
     }
 
     /**
-     * [NUEVO] Horas semanales ya programadas para la sección (para comparar con las de la UD).
+     * Grilla con TODOS los bloques del docente en el período activo.
+     * Los de otros programas son de solo lectura. El rango cubre sus turnos y sus bloques.
      */
     #[Computed]
-    public function scheduledHours(): float
+    public function teacherGrid(): array
     {
-        return round($this->currentSchedules->sum(
-            fn ($s) => $s->start_time->diffInMinutes($s->end_time)
-        ) / 60, 2);
-    }
+        $days = ScheduleValidationService::DAYS;
+        $grid = ['days' => $days, 'from' => null, 'to' => null, 'blocks' => array_fill_keys($days, [])];
 
-    public function setPresetTime($range)
-    {
-        if ($range === 'morning') {
-            $this->start_time = '08:00';
-            $this->end_time = '13:00';
-        } elseif ($range === 'night') {
-            $this->start_time = '17:00';
-            $this->end_time = '21:30';
+        if ($this->activePeriod && $this->selectedTeacherId) {
+            $validator = $this->validator();
+            $assignments = TeacherAssignment::with(['didacticUnit.module.studyPlan.career', 'shift', 'schedules.classroomResource'])
+                ->where('academic_period_id', $this->activePeriod->id)
+                ->where('teacher_id', $this->selectedTeacherId)
+                ->where('status', 'active')
+                ->get();
+
+            $widen = function (?string $from, ?string $to) use (&$grid) {
+                if ($from && ($grid['from'] === null || $from < $grid['from'])) {
+                    $grid['from'] = $from;
+                }
+                if ($to && ($grid['to'] === null || $to > $grid['to'])) {
+                    $grid['to'] = $to;
+                }
+            };
+
+            foreach ($assignments as $a) {
+                $widen($a->shift?->start_time?->format('H:i'), $a->shift?->end_time?->format('H:i'));
+                $career = $a->didacticUnit->module->studyPlan->career ?? null;
+
+                foreach ($a->schedules as $s) {
+                    $start = $s->start_time->format('H:i');
+                    $end = $s->end_time->format('H:i');
+                    $widen($start, $end);
+
+                    if (!isset($grid['blocks'][$s->day_of_week])) {
+                        continue;
+                    }
+
+                    $grid['blocks'][$s->day_of_week][] = [
+                        'id' => $s->id,
+                        'assignment_id' => $a->id,
+                        'unit' => $a->didacticUnit->name ?? 'Curso',
+                        'section' => $a->section,
+                        'classroom' => $s->classroomResource->name ?? null,
+                        'start' => $start,
+                        'end' => $end,
+                        'editable' => $career && (int) $career->id === (int) $this->selectedCareerId,
+                        'program' => $career->name ?? '',
+                        'out_of_shift' => $validator->isWithinShift($a, $start, $end) === false,
+                    ];
+                }
+            }
+
+            foreach ($grid['blocks'] as $day => $blocks) {
+                usort($blocks, fn ($x, $y) => strcmp($x['start'], $y['start']));
+                $grid['blocks'][$day] = $blocks;
+            }
         }
+
+        $grid['from'] ??= '07:00';
+        $grid['to'] ??= '23:00';
+
+        return $grid;
+    }
+
+    public function selectAssignment($id)
+    {
+        $assignment = $this->resolveAssignment($id);
+
+        $this->resetBlockForm();
+        $this->selectedAssignmentId = $assignment?->id ?? '';
+        unset($this->selectedAssignment);
     }
 
     // ==========================================
-    // [NUEVO] EDICIÓN DE BLOQUES
+    // FORMULARIO DE BLOQUES
     // ==========================================
 
-    /**
-     * Carga un bloque existente en el formulario para modificarlo
-     * (antes solo se podía eliminar y volver a crear).
-     */
+    /** Carga un bloque del programa seleccionado en el formulario (y selecciona su UD). */
     public function editSchedule($id)
     {
-        $schedule = $this->currentSchedules->firstWhere('id', (int) $id);
-        if (!$schedule) {
+        $schedule = Schedule::find($id);
+        $assignment = $schedule ? $this->resolveAssignment($schedule->teacher_assignment_id) : null;
+        if (!$assignment) {
             return;
         }
 
+        $this->selectedAssignmentId = $assignment->id;
+        unset($this->selectedAssignment);
         $this->editingScheduleId = $schedule->id;
         $this->day_of_week = $schedule->day_of_week;
         $this->start_time = $schedule->start_time->format('H:i');
@@ -294,6 +312,16 @@ class ScheduleManager extends Component
         $this->resetBlockForm();
     }
 
+    /** Rellena inicio y fin con el horario del turno de la sección. */
+    public function useShiftHours()
+    {
+        $shift = $this->selectedAssignment?->shift;
+        if ($shift?->start_time && $shift?->end_time) {
+            $this->start_time = $shift->start_time->format('H:i');
+            $this->end_time = $shift->end_time->format('H:i');
+        }
+    }
+
     private function resetBlockForm(): void
     {
         $this->editingScheduleId = null;
@@ -304,39 +332,31 @@ class ScheduleManager extends Component
         $this->resetValidation();
     }
 
-    // ==========================================
-    // REGISTRO DE BLOQUES Y VALIDACIÓN DE CRUCES
-    // ==========================================
-
     /**
-     * [MODIFICADO] Crea o actualiza un bloque. Valida cruces de la propia sección,
-     * del docente, del grupo de estudiantes (programa + semestre + turno + sección) y del aula,
-     * siempre dentro del periodo activo.
+     * Crea o actualiza un bloque de la sección seleccionada.
+     * Valida turno, horas semanales y cruces con ScheduleValidationService.
      */
-    public function addSchedule()
+    public function saveSchedule()
     {
         $this->authorize('gestionar-horarios');
 
-        // [CORREGIDO] La sección se vuelve a resolver en el servidor (no se confía en el id del formulario)
-        $assignment = $this->selectedAssignmentId ? $this->findSelectableAssignment($this->selectedAssignmentId) : null;
+        $assignment = $this->resolveAssignment($this->selectedAssignmentId);
         if (!$assignment) {
+            $this->selectedAssignmentId = '';
             $this->dispatch('swal', [
                 'icon'  => 'warning',
-                'title' => 'Seleccione una sección',
-                'text'  => 'Seleccione el curso y la sección antes de registrar el bloque.'
+                'title' => 'Seleccione una unidad didáctica',
+                'text'  => 'Seleccione el programa, el docente y una de sus unidades didácticas antes de registrar el bloque.',
             ]);
             return;
         }
 
         $this->validate([
-            'day_of_week'           => 'required|in:' . implode(',', self::DAYS),
+            'day_of_week'           => 'required|in:' . implode(',', ScheduleValidationService::DAYS),
             'start_time'            => 'required|date_format:H:i',
             'end_time'              => 'required|date_format:H:i|after:start_time',
             'classroom_resource_id' => 'nullable|exists:classroom_resources,id',
         ]);
-
-        $start = TimeCast::normalize($this->start_time);
-        $end = TimeCast::normalize($this->end_time);
 
         $editing = null;
         if ($this->editingScheduleId) {
@@ -347,17 +367,19 @@ class ScheduleManager extends Component
             }
         }
 
-        if ($message = $this->findConflict($assignment, $this->day_of_week, $start, $end, $editing?->id)) {
-            $this->dispatch('swal', ['icon' => 'error', 'title' => 'Cruce de horario', 'text' => $message]);
+        $classroomId = $this->classroom_resource_id ? (int) $this->classroom_resource_id : null;
+
+        if ($message = $this->validator()->validate($assignment, $this->day_of_week, $this->start_time, $this->end_time, $classroomId, $editing?->id)) {
+            $this->dispatch('swal', ['icon' => 'error', 'title' => 'No se puede guardar el bloque', 'text' => $message]);
             return;
         }
 
         $data = [
             'teacher_assignment_id' => $assignment->id,
             'day_of_week'           => $this->day_of_week,
-            'start_time'            => $start,
-            'end_time'              => $end,
-            'classroom_resource_id' => $this->classroom_resource_id ?: null,
+            'start_time'            => TimeCast::normalize($this->start_time),
+            'end_time'              => TimeCast::normalize($this->end_time),
+            'classroom_resource_id' => $classroomId,
         ];
 
         $editing ? $editing->update($data) : Schedule::create($data);
@@ -365,98 +387,57 @@ class ScheduleManager extends Component
         $this->dispatch('swal', [
             'icon'  => 'success',
             'title' => $editing ? 'Actualizado' : 'Agregado',
-            'text'  => $editing ? 'Bloque horario actualizado.' : 'Bloque horario registrado correctamente.'
+            'text'  => $editing ? 'Bloque horario actualizado.' : 'Bloque horario registrado correctamente.',
         ]);
 
         $this->resetBlockForm();
-        $this->loadSchedules();
+        unset($this->teacherGrid, $this->teacherAssignments);
     }
 
-    /**
-     * [NUEVO] Devuelve el motivo del cruce o null si el bloque es válido.
-     */
-    private function findConflict(TeacherAssignment $assignment, string $day, string $start, string $end, ?int $ignoreScheduleId): ?string
+    /** Pide confirmación (SweetAlert) antes de eliminar un bloque. */
+    public function confirmDeleteSchedule($id)
     {
-        $periodId = $this->activePeriod->id;
-
-        // Bloques del periodo activo que se solapan en el mismo día
-        $overlapping = fn () => Schedule::with(['teacherAssignment.didacticUnit', 'classroomResource'])
-            ->when($ignoreScheduleId, fn ($q) => $q->where('id', '!=', $ignoreScheduleId))
-            ->where('day_of_week', $day)
-            ->where('start_time', '<', $end)
-            ->where('end_time', '>', $start)
-            ->whereHas('teacherAssignment', fn ($q) => $q
-                ->where('academic_period_id', $periodId)
-                ->where('status', 'active'));
-
-        $describe = fn (Schedule $s) => sprintf(
-            '%s - Sección %s (%s a %s)',
-            $s->teacherAssignment->didacticUnit->name ?? 'Curso',
-            $s->teacherAssignment->section,
-            $s->start_time->format('H:i'),
-            $s->end_time->format('H:i')
-        );
-
-        // 1. Misma sección
-        if ($s = $overlapping()->where('teacher_assignment_id', $assignment->id)->first()) {
-            return 'Esta sección ya tiene un bloque en ese día y rango: ' . $describe($s) . '.';
+        $schedule = Schedule::with('teacherAssignment.didacticUnit')->find($id);
+        if (!$schedule || !$this->resolveAssignment($schedule->teacher_assignment_id)) {
+            return;
         }
 
-        // 2. Docente en otra sección
-        if ($s = $overlapping()
-            ->where('teacher_assignment_id', '!=', $assignment->id)
-            ->whereHas('teacherAssignment', fn ($q) => $q->where('teacher_id', $assignment->teacher_id))
-            ->first()) {
-            return 'El docente ya tiene clase en ese horario: ' . $describe($s) . '.';
-        }
-
-        // 3. [NUEVO] Mismo grupo de estudiantes: programa + semestre + turno + sección
-        $unit = $assignment->didacticUnit;
-        $careerId = $unit->module->studyPlan->career_id ?? null;
-        if ($careerId && $s = $overlapping()
-            ->where('teacher_assignment_id', '!=', $assignment->id)
-            ->whereHas('teacherAssignment', fn ($q) => $q
-                ->where('shift_id', $assignment->shift_id)
-                ->where('section', $assignment->section)
-                ->whereHas('didacticUnit', fn ($u) => $u
-                    ->where('semester', $unit->semester)
-                    ->whereHas('module.studyPlan', fn ($p) => $p->where('career_id', $careerId))))
-            ->first()) {
-            return "Los estudiantes del semestre {$unit->semester}, sección {$assignment->section} ya tienen otra clase en ese horario: " . $describe($s) . '.';
-        }
-
-        // 4. Aula (solo bloques del periodo activo; antes chocaba también con periodos pasados)
-        if ($this->classroom_resource_id && $s = $overlapping()
-            ->where('classroom_resource_id', $this->classroom_resource_id)
-            ->first()) {
-            return 'El aula ' . ($s->classroomResource->name ?? '') . ' ya está ocupada en ese horario: ' . $describe($s) . '.';
-        }
-
-        return null;
+        $this->dispatch('swal:confirm', [
+            'title' => '¿Eliminar este bloque?',
+            'text' => sprintf(
+                '%s - Sección %s (%s a %s).',
+                $schedule->teacherAssignment->didacticUnit->name ?? 'Curso',
+                $schedule->teacherAssignment->section,
+                $schedule->start_time->format('H:i'),
+                $schedule->end_time->format('H:i')
+            ),
+            'icon' => 'warning',
+            'confirmButtonText' => 'Sí, eliminar',
+            'id' => $schedule->id,
+            'onConfirmed' => 'deleteSchedule',
+        ]);
     }
 
+    #[On('deleteSchedule')]
     public function deleteSchedule($id)
     {
         $this->authorize('gestionar-horarios');
 
-        // [CORREGIDO] Solo bloques de la sección seleccionada
-        $deleted = $this->selectedAssignment
-            ? Schedule::where('teacher_assignment_id', $this->selectedAssignment->id)->whereKey($id)->delete()
-            : 0;
+        // Solo bloques de secciones del docente y programa seleccionados
+        $schedule = Schedule::find($id);
+        if (!$schedule || !$this->resolveAssignment($schedule->teacher_assignment_id)) {
+            return;
+        }
+
+        $schedule->delete();
 
         if ((int) $this->editingScheduleId === (int) $id) {
             $this->resetBlockForm();
         }
 
-        $this->loadSchedules();
+        unset($this->teacherGrid, $this->teacherAssignments);
 
-        if ($deleted) {
-            $this->dispatch('swal', [
-                'icon' => 'success',
-                'title' => 'Eliminado',
-                'text' => 'Bloque eliminado.'
-            ]);
-        }
+        $this->dispatch('swal', ['icon' => 'success', 'title' => 'Eliminado', 'text' => 'Bloque eliminado.']);
     }
 
     // ==========================================

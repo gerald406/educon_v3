@@ -24,7 +24,7 @@ use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /**
- * Gestión de horarios (academic-process/schedules) y carga académica.
+ * Gestión de horarios (academic-process/schedules): flujo programa → docente → grilla → UD.
  */
 class ScheduleManagerTest extends TestCase
 {
@@ -40,6 +40,8 @@ class ScheduleManagerTest extends TestCase
 
     private Shift $shift;
 
+    private Teacher $teacher;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -54,10 +56,16 @@ class ScheduleManagerTest extends TestCase
 
         $this->period = AcademicPeriod::factory()->create(['status' => 'active']);
         $this->career = Career::factory()->create();
-        $this->module = Module::factory()->create([
-            'study_plan_id' => StudyPlan::factory()->create(['career_id' => $this->career->id])->id,
-        ]);
+        $this->module = $this->moduleOf($this->career);
         $this->shift = Shift::create(['name' => 'Mañana', 'start_time' => '08:00', 'end_time' => '13:00']);
+        $this->teacher = Teacher::factory()->create();
+    }
+
+    private function moduleOf(Career $career): Module
+    {
+        return Module::factory()->create([
+            'study_plan_id' => StudyPlan::factory()->create(['career_id' => $career->id])->id,
+        ]);
     }
 
     private function unit(array $attributes = []): DidacticUnit
@@ -75,30 +83,40 @@ class ScheduleManagerTest extends TestCase
         return TeacherAssignment::factory()->create(array_merge([
             'academic_period_id' => $this->period->id,
             'didactic_unit_id' => $unit->id,
+            'teacher_id' => $this->teacher->id,
             'shift_id' => $this->shift->id,
             'section' => 'A',
             'status' => 'active',
         ], $attributes));
     }
 
-    /** Componente con curso y sección ya elegidos. */
-    private function managerFor(TeacherAssignment $assignment)
+    private function block(TeacherAssignment $a, string $day, string $start, string $end, ?int $roomId = null): Schedule
     {
-        return Livewire::actingAs($this->admin)
-            ->test(ScheduleManager::class)
-            ->set('selectedCareerId', $this->career->id)
-            ->call('selectUnit', $assignment->didactic_unit_id)
-            ->set('selectedAssignmentId', $assignment->id);
+        return Schedule::create([
+            'teacher_assignment_id' => $a->id,
+            'classroom_resource_id' => $roomId,
+            'day_of_week' => $day,
+            'start_time' => $start,
+            'end_time' => $end,
+        ]);
     }
 
-    private function addBlock($component, string $day, string $start, string $end, $classroomId = '')
+    /** Componente con programa y docente ya elegidos. */
+    private function managerForTeacher(?Teacher $teacher = null, ?User $as = null)
+    {
+        return Livewire::actingAs($as ?? $this->admin)
+            ->test(ScheduleManager::class)
+            ->set('selectedCareerId', $this->career->id)
+            ->set('selectedTeacherId', ($teacher ?? $this->teacher)->id);
+    }
+
+    private function fillBlock($component, string $day, string $start, string $end, $classroomId = '')
     {
         return $component
             ->set('day_of_week', $day)
             ->set('start_time', $start)
             ->set('end_time', $end)
-            ->set('classroom_resource_id', $classroomId)
-            ->call('addSchedule');
+            ->set('classroom_resource_id', $classroomId);
     }
 
     // ------------------------------------------------------------------
@@ -121,167 +139,237 @@ class ScheduleManagerTest extends TestCase
         $this->assertSame('08:00:00', $fresh->getRawOriginal('start_time'));
     }
 
-    public function test_grid_renders_existing_blocks(): void
-    {
-        $assignment = $this->section($this->unit());
-        Schedule::create(['teacher_assignment_id' => $assignment->id, 'day_of_week' => 'monday', 'start_time' => '08:00', 'end_time' => '10:00']);
+    // ------------------------------------------------------------------
+    // Paso 1-2: programa → docentes con carga en el programa
+    // ------------------------------------------------------------------
 
-        $this->managerFor($assignment)
-            ->assertSee('08:00 - 10:00')
-            ->assertSee('Horas programadas');
+    public function test_teachers_are_listed_only_with_active_load_in_program(): void
+    {
+        $this->section($this->unit());
+
+        $otherProgram = Teacher::factory()->create();
+        TeacherAssignment::factory()->create([
+            'academic_period_id' => $this->period->id,
+            'didactic_unit_id' => DidacticUnit::factory()->create(['module_id' => $this->moduleOf(Career::factory()->create())->id])->id,
+            'teacher_id' => $otherProgram->id, 'shift_id' => $this->shift->id, 'status' => 'active',
+        ]);
+
+        $suspended = Teacher::factory()->create();
+        $this->section($this->unit(), ['teacher_id' => $suspended->id, 'status' => 'suspended']);
+
+        $onlyPlanned = Teacher::factory()->create();
+        $planned = AcademicPeriod::factory()->create(['status' => 'planned', 'code' => 'NEXT-I']);
+        $this->section($this->unit(), ['teacher_id' => $onlyPlanned->id, 'academic_period_id' => $planned->id]);
+
+        $component = Livewire::actingAs($this->admin)->test(ScheduleManager::class)
+            ->set('selectedCareerId', $this->career->id);
+
+        $this->assertSame([$this->teacher->id], $component->instance()->programTeachers->pluck('id')->all());
     }
 
-    // ------------------------------------------------------------------
-    // Selección (causa de que los bloques "se sobrescriban" en otra sección)
-    // ------------------------------------------------------------------
-
-    public function test_selecting_another_course_clears_previous_section(): void
+    public function test_changing_program_clears_teacher_assignment_and_form(): void
     {
-        $first = $this->section($this->unit(['name' => 'Curso Uno']));
-        $second = $this->unit(['name' => 'Curso Dos']);
-        $this->section($second, ['section' => 'A']);
-        $this->section($second, ['section' => 'B']);
+        $a = $this->section($this->unit());
+        $b = $this->block($a, 'monday', '08:00', '10:00');
 
-        $component = $this->managerFor($first)
-            ->assertSet('selectedAssignmentId', $first->id)
-            ->call('selectUnit', $second->id)
+        $this->managerForTeacher()
+            ->call('editSchedule', $b->id)
+            ->assertSet('selectedAssignmentId', $a->id)
+            ->set('selectedCareerId', Career::factory()->create()->id)
+            ->assertSet('selectedTeacherId', '')
             ->assertSet('selectedAssignmentId', '')
-            ->assertSet('selectedAssignment', null);
-
-        $this->addBlock($component, 'monday', '08:00', '10:00');
-
-        $this->assertSame(0, Schedule::count());
+            ->assertSet('editingScheduleId', null)
+            ->assertSet('start_time', '');
     }
 
-    public function test_typing_a_new_search_clears_the_selection(): void
+    public function test_changing_teacher_clears_assignment_and_edit(): void
     {
-        $assignment = $this->section($this->unit());
+        $a = $this->section($this->unit());
+        $b = $this->block($a, 'monday', '08:00', '10:00');
+        $other = Teacher::factory()->create();
+        $this->section($this->unit(['semester' => 2]), ['teacher_id' => $other->id]);
 
-        $this->managerFor($assignment)
-            ->set('searchUnit', 'otro curso')
-            ->assertSet('selectedUnitId', '')
+        $component = $this->managerForTeacher()
+            ->call('editSchedule', $b->id)
+            ->set('selectedTeacherId', $other->id)
             ->assertSet('selectedAssignmentId', '')
-            ->assertSet('selectedAssignment', null);
-    }
-
-    public function test_section_from_another_course_cannot_be_used(): void
-    {
-        $assignment = $this->section($this->unit());
-        $foreign = $this->section($this->unit(), ['section' => 'B']);
-
-        $component = $this->managerFor($assignment)
-            ->set('selectedAssignmentId', $foreign->id)
-            ->assertSet('selectedAssignment', null);
-
-        $this->addBlock($component, 'monday', '08:00', '10:00');
-
-        $this->assertSame(0, Schedule::count());
-    }
-
-    // ------------------------------------------------------------------
-    // Cruces
-    // ------------------------------------------------------------------
-
-    public function test_overlapping_block_in_same_section_is_rejected(): void
-    {
-        $component = $this->managerFor($this->section($this->unit()));
-
-        $this->addBlock($component, 'monday', '08:00', '10:00');
-        $this->addBlock($component, 'monday', '09:00', '11:00');
-        $this->addBlock($component, 'monday', '10:00', '12:00'); // contiguo: válido
-
-        $this->assertSame(2, Schedule::count());
-    }
-
-    public function test_teacher_cannot_be_in_two_sections_at_the_same_time(): void
-    {
-        $teacher = Teacher::factory()->create();
-        $a = $this->section($this->unit(), ['teacher_id' => $teacher->id]);
-        $b = $this->section($this->unit(['semester' => 3]), ['teacher_id' => $teacher->id]);
-
-        $this->addBlock($this->managerFor($a), 'tuesday', '08:00', '10:00');
-        $this->addBlock($this->managerFor($b), 'tuesday', '09:00', '11:00');
-
-        $this->assertSame(1, Schedule::count());
-    }
-
-    public function test_same_student_group_cannot_have_two_courses_at_the_same_time(): void
-    {
-        $courseA = $this->section($this->unit());
-        $courseB = $this->section($this->unit());                    // mismo semestre, turno y sección
-        $courseC = $this->section($this->unit(), ['section' => 'B']); // otra sección: válido
-
-        $this->addBlock($this->managerFor($courseA), 'wednesday', '08:00', '10:00');
-        $this->addBlock($this->managerFor($courseB), 'wednesday', '08:00', '10:00');
-        $this->addBlock($this->managerFor($courseC), 'wednesday', '08:00', '10:00');
-
-        $this->assertSame(0, Schedule::where('teacher_assignment_id', $courseB->id)->count());
-        $this->assertSame(1, Schedule::where('teacher_assignment_id', $courseC->id)->count());
-    }
-
-    public function test_classroom_conflict_ignores_other_periods(): void
-    {
-        $room = ClassroomResource::factory()->create();
-        $oldPeriod = AcademicPeriod::factory()->create(['status' => 'closed', 'code' => 'OLD-I']);
-        $old = $this->section($this->unit(), ['academic_period_id' => $oldPeriod->id]);
-        Schedule::create(['teacher_assignment_id' => $old->id, 'classroom_resource_id' => $room->id, 'day_of_week' => 'thursday', 'start_time' => '08:00', 'end_time' => '10:00']);
-
-        $current = $this->section($this->unit(['semester' => 2]));
-        $other = $this->section($this->unit(['semester' => 4]));
-
-        $this->addBlock($this->managerFor($current), 'thursday', '08:00', '10:00', $room->id); // periodo pasado: válido
-        $this->addBlock($this->managerFor($other), 'thursday', '09:00', '11:00', $room->id);   // mismo periodo: cruce
-
-        $this->assertSame(1, Schedule::where('teacher_assignment_id', $current->id)->count());
-        $this->assertSame(0, Schedule::where('teacher_assignment_id', $other->id)->count());
-    }
-
-    // ------------------------------------------------------------------
-    // Edición y eliminación
-    // ------------------------------------------------------------------
-
-    public function test_block_can_be_edited_without_conflicting_with_itself(): void
-    {
-        $assignment = $this->section($this->unit());
-        $schedule = Schedule::create(['teacher_assignment_id' => $assignment->id, 'day_of_week' => 'friday', 'start_time' => '08:00', 'end_time' => '10:00']);
-
-        $this->managerFor($assignment)
-            ->call('editSchedule', $schedule->id)
-            ->assertSet('start_time', '08:00')
-            ->set('end_time', '11:00')
-            ->call('addSchedule')
             ->assertSet('editingScheduleId', null);
 
+        $this->fillBlock($component, 'monday', '10:00', '12:00')->call('saveSchedule');
+
+        $this->assertSame('08:00', $b->fresh()->start_time->format('H:i'));
         $this->assertSame(1, Schedule::count());
-        $this->assertSame('11:00', $schedule->fresh()->end_time->format('H:i'));
     }
 
-    public function test_only_blocks_of_the_selected_section_can_be_deleted(): void
+    // ------------------------------------------------------------------
+    // Paso 3: grilla completa del docente
+    // ------------------------------------------------------------------
+
+    public function test_grid_shows_blocks_of_other_programs_read_only(): void
     {
-        $assignment = $this->section($this->unit());
-        $foreign = Schedule::create(['teacher_assignment_id' => $this->section($this->unit())->id, 'day_of_week' => 'monday', 'start_time' => '08:00', 'end_time' => '10:00']);
+        $mine = $this->section($this->unit());
+        $this->block($mine, 'monday', '08:00', '10:00');
 
-        $this->managerFor($assignment)->call('deleteSchedule', $foreign->id);
+        $otherCareer = Career::factory()->create(['name' => 'Enfermería Técnica']);
+        $foreign = TeacherAssignment::factory()->create([
+            'academic_period_id' => $this->period->id,
+            'didactic_unit_id' => DidacticUnit::factory()->create(['module_id' => $this->moduleOf($otherCareer)->id])->id,
+            'teacher_id' => $this->teacher->id, 'shift_id' => $this->shift->id, 'section' => 'A', 'status' => 'active',
+        ]);
+        $this->block($foreign, 'monday', '10:00', '12:00');
 
-        $this->assertNotNull($foreign->fresh());
+        $monday = collect($this->managerForTeacher()->instance()->teacherGrid['blocks']['monday']);
+
+        $this->assertTrue($monday->firstWhere('assignment_id', $mine->id)['editable']);
+        $foreignBlock = $monday->firstWhere('assignment_id', $foreign->id);
+        $this->assertFalse($foreignBlock['editable']);
+        $this->assertSame('Enfermería Técnica', $foreignBlock['program']);
     }
 
-    public function test_user_without_permission_cannot_add_blocks(): void
+    public function test_grid_range_covers_teacher_shifts(): void
     {
-        $assignment = $this->section($this->unit());
-        $user = User::factory()->create();
+        $night = Shift::create(['name' => 'Nocturno', 'start_time' => '18:30', 'end_time' => '22:30']);
+        $this->section($this->unit());
+        $this->section($this->unit(['semester' => 3]), ['shift_id' => $night->id]);
 
-        Livewire::actingAs($user)
-            ->test(ScheduleManager::class)
-            ->set('selectedCareerId', $this->career->id)
-            ->call('selectUnit', $assignment->didactic_unit_id)
-            ->set('day_of_week', 'monday')
-            ->set('start_time', '08:00')
-            ->set('end_time', '10:00')
-            ->call('addSchedule')
-            ->assertForbidden();
+        $grid = $this->managerForTeacher()->instance()->teacherGrid;
+        $this->assertSame('08:00', $grid['from']);
+        $this->assertSame('22:30', $grid['to']);
+
+        // Un bloque existente fuera del rango amplía la grilla
+        $this->block($this->section($this->unit(['semester' => 5])), 'friday', '07:00', '08:00');
+        $this->assertSame('07:00', $this->managerForTeacher()->instance()->teacherGrid['from']);
+    }
+
+    // ------------------------------------------------------------------
+    // Paso 4: UD del docente en el programa y formulario
+    // ------------------------------------------------------------------
+
+    public function test_assignment_list_only_has_program_units(): void
+    {
+        $mine = $this->section($this->unit());
+        TeacherAssignment::factory()->create([
+            'academic_period_id' => $this->period->id,
+            'didactic_unit_id' => DidacticUnit::factory()->create(['module_id' => $this->moduleOf(Career::factory()->create())->id])->id,
+            'teacher_id' => $this->teacher->id, 'shift_id' => $this->shift->id, 'status' => 'active',
+        ]);
+
+        $ids = $this->managerForTeacher()->instance()->teacherAssignments->pluck('id')->all();
+
+        $this->assertSame([$mine->id], $ids);
+    }
+
+    public function test_selecting_assignment_of_other_teacher_is_ignored(): void
+    {
+        $this->section($this->unit());
+        $foreign = $this->section($this->unit(['semester' => 2]), ['teacher_id' => Teacher::factory()->create()->id]);
+
+        $component = $this->managerForTeacher()
+            ->call('selectAssignment', $foreign->id)
+            ->assertSet('selectedAssignmentId', '');
+
+        $this->fillBlock($component, 'monday', '08:00', '10:00')->call('saveSchedule');
 
         $this->assertSame(0, Schedule::count());
+    }
+
+    public function test_cannot_edit_or_delete_block_of_another_section(): void
+    {
+        $this->section($this->unit());
+        $foreign = $this->section($this->unit(['semester' => 2]), ['teacher_id' => Teacher::factory()->create()->id]);
+        $foreignBlock = $this->block($foreign, 'monday', '08:00', '10:00');
+
+        $this->managerForTeacher()
+            ->call('editSchedule', $foreignBlock->id)
+            ->assertSet('editingScheduleId', null)
+            ->call('deleteSchedule', $foreignBlock->id);
+
+        $this->assertNotNull($foreignBlock->fresh());
+    }
+
+    public function test_save_creates_block_and_shows_remaining_hours(): void
+    {
+        $a = $this->section($this->unit());
+
+        $component = $this->managerForTeacher()->call('selectAssignment', $a->id);
+        $this->fillBlock($component, 'monday', '08:00', '10:00')
+            ->call('saveSchedule')
+            ->assertDispatched('swal', fn ($e, $p) => ($p[0]['icon'] ?? null) === 'success')
+            ->assertSee('Quedan 2 h');
+
+        $this->assertSame(1, Schedule::where('teacher_assignment_id', $a->id)->count());
+    }
+
+    public function test_save_rejects_block_outside_shift(): void
+    {
+        $a = $this->section($this->unit());
+
+        $component = $this->managerForTeacher()->call('selectAssignment', $a->id);
+        $this->fillBlock($component, 'monday', '14:00', '16:00')
+            ->call('saveSchedule')
+            ->assertDispatched('swal', fn ($e, $p) => ($p[0]['text'] ?? null) === 'El turno Mañana es de 08:00 a 13:00.');
+
+        $this->assertSame(0, Schedule::count());
+    }
+
+    public function test_editing_out_of_shift_block_only_classroom_is_rejected(): void
+    {
+        $a = $this->section($this->unit());
+        $b = $this->block($a, 'monday', '19:00', '20:00');
+        $room = ClassroomResource::factory()->create();
+
+        $this->managerForTeacher()
+            ->call('editSchedule', $b->id)
+            ->set('classroom_resource_id', $room->id)
+            ->call('saveSchedule')
+            ->assertDispatched('swal', fn ($e, $p) => ($p[0]['text'] ?? null) === 'El turno Mañana es de 08:00 a 13:00.');
+
+        $this->assertNull($b->fresh()->classroom_resource_id);
+    }
+
+    public function test_use_shift_hours_fills_form(): void
+    {
+        $a = $this->section($this->unit());
+
+        $this->managerForTeacher()
+            ->call('selectAssignment', $a->id)
+            ->call('useShiftHours')
+            ->assertSet('start_time', '08:00')
+            ->assertSet('end_time', '13:00');
+    }
+
+    public function test_delete_asks_confirmation_then_deletes(): void
+    {
+        $a = $this->section($this->unit());
+        $b = $this->block($a, 'monday', '08:00', '10:00');
+
+        $component = $this->managerForTeacher()
+            ->call('confirmDeleteSchedule', $b->id)
+            ->assertDispatched('swal:confirm', fn ($e, $p) => ($p[0]['onConfirmed'] ?? null) === 'deleteSchedule' && ($p[0]['id'] ?? null) === $b->id);
+
+        $this->assertNotNull($b->fresh());
+
+        $component->dispatch('deleteSchedule', id: $b->id);
+
+        $this->assertNull($b->fresh());
+    }
+
+    public function test_user_without_permission_gets_403(): void
+    {
+        $a = $this->section($this->unit());
+        $b = $this->block($a, 'monday', '08:00', '10:00');
+        $user = User::factory()->create();
+
+        $this->managerForTeacher(null, $user)
+            ->call('selectAssignment', $a->id)
+            ->call('saveSchedule')
+            ->assertForbidden();
+
+        $this->managerForTeacher(null, $user)
+            ->call('deleteSchedule', $b->id)
+            ->assertForbidden();
+
+        $this->assertNotNull($b->fresh());
     }
 
     // ------------------------------------------------------------------
