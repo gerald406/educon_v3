@@ -549,6 +549,7 @@ class ScheduleManager extends Component
         ])
             ->whereHas('teacherAssignment', function ($q) {
                 $q->where('academic_period_id', $this->activePeriod->id)
+                    ->where('status', 'active') // [CORREGIDO] solo secciones activas (igual que la validación de cruces)
                     ->where('shift_id', $this->filterShiftId) // Filtro por Turno
                     ->whereHas('didacticUnit', function ($q2) {
                         $q2->where('semester', $this->filterCycleId) // Filtro por Semestre
@@ -571,7 +572,8 @@ class ScheduleManager extends Component
     public function progressStats()
     {
         if (!$this->selectedCareerId || !$this->filterCycleId || !$this->activePeriod) {
-            return ['total_courses' => 0, 'scheduled_courses' => 0];
+            // [CORREGIDO] 'percentage' faltaba: la vista consolidada fallaba sin período activo
+            return ['total_courses' => 0, 'scheduled_courses' => 0, 'percentage' => 0];
         }
 
         // Total de cursos del semestre
@@ -581,16 +583,19 @@ class ScheduleManager extends Component
                 $q->where('career_id', $this->selectedCareerId);
             })->count();
 
-        // Cursos que ya tienen asignación docente y al menos un horario en este turno
+        // Cursos (UD distintas) con al menos una sección activa con horario en este turno.
+        // [CORREGIDO] Antes contaba secciones: con A y B el avance superaba el 100 %.
         $scheduledCourses = TeacherAssignment::where('academic_period_id', $this->activePeriod->id)
+            ->where('status', 'active')
             ->where('shift_id', $this->filterShiftId)
             ->whereHas('schedules')
             ->whereHas('didacticUnit', function ($q) {
                 $q->where('semester', $this->filterCycleId)
+                    ->where('status', 'active')
                     ->whereHas('module.studyPlan', function ($q2) {
                         $q2->where('career_id', $this->selectedCareerId);
                     });
-            })->count();
+            })->distinct()->count('didactic_unit_id');
 
         return [
             'total_courses' => $totalCourses,
@@ -645,12 +650,65 @@ class ScheduleManager extends Component
      * Elimina TODOS los horarios del semestre seleccionado en la vista consolidada.
      * Actúa como un reseteo masivo de la programación horaria para ese ciclo/turno/programa.
      */
-    public function resetSemesterSchedules()
+    /**
+     * [NUEVO] Secciones activas del programa + semestre + turno de la vista consolidada
+     * (null si faltan filtros o no hay período activo).
+     */
+    private function consolidatedAssignmentIds(): ?Collection
+    {
+        if (!$this->selectedCareerId || !$this->filterCycleId || !$this->filterShiftId || !$this->activePeriod) {
+            return null;
+        }
+
+        return TeacherAssignment::where('academic_period_id', $this->activePeriod->id)
+            ->where('status', 'active') // [CORREGIDO] no borrar bloques de secciones suspendidas/concluidas
+            ->where('shift_id', $this->filterShiftId)
+            ->whereHas('didacticUnit', function ($q) {
+                $q->where('semester', $this->filterCycleId)
+                    ->whereHas('module.studyPlan', fn($q2) => $q2->where('career_id', $this->selectedCareerId));
+            })
+            ->pluck('id');
+    }
+
+    /**
+     * [NUEVO] Confirmación (SweetAlert) indicando cuántos bloques se eliminarán.
+     */
+    public function confirmResetSemesterSchedules()
+    {
+        $this->authorize('gestionar-horarios');
+
+        $assignmentIds = $this->consolidatedAssignmentIds();
+        $count = $assignmentIds ? Schedule::whereIn('teacher_assignment_id', $assignmentIds)->count() : 0;
+
+        if ($count === 0) {
+            $this->dispatch('swal', [
+                'icon'  => 'info',
+                'title' => 'Sin horarios',
+                'text'  => 'No hay bloques horarios para los filtros seleccionados.'
+            ]);
+            return;
+        }
+
+        $this->dispatch('swal:confirm', [
+            'title' => '¿Reiniciar el horario del semestre?',
+            'text' => "Se eliminarán {$count} bloques del semestre {$this->filterCycleId} en este turno. Esta acción no se puede deshacer.",
+            'icon' => 'warning',
+            'confirmButtonText' => 'Sí, eliminar',
+            'id' => null,
+            'onConfirmed' => 'resetSemesterSchedules',
+        ]);
+    }
+
+    // $id no se usa: el layout siempre envía { id } en los eventos de swal:confirm
+    #[On('resetSemesterSchedules')]
+    public function resetSemesterSchedules($id = null)
     {
         $this->authorize('gestionar-horarios'); // [NUEVO]
 
+        $assignmentIds = $this->consolidatedAssignmentIds();
+
         // Validar que los filtros necesarios estén seleccionados
-        if (!$this->selectedCareerId || !$this->filterCycleId || !$this->filterShiftId || !$this->activePeriod) {
+        if ($assignmentIds === null) {
             $this->dispatch('swal', [
                 'icon'  => 'error',
                 'title' => 'Filtros incompletos',
@@ -658,15 +716,6 @@ class ScheduleManager extends Component
             ]);
             return;
         }
-
-        // Obtener los IDs de las asignaciones que coinciden con los filtros
-        $assignmentIds = TeacherAssignment::where('academic_period_id', $this->activePeriod->id)
-            ->where('shift_id', $this->filterShiftId)
-            ->whereHas('didacticUnit', function ($q) {
-                $q->where('semester', $this->filterCycleId)
-                    ->whereHas('module.studyPlan', fn($q2) => $q2->where('career_id', $this->selectedCareerId));
-            })
-            ->pluck('id');
 
         if ($assignmentIds->isEmpty()) {
             $this->dispatch('swal', [

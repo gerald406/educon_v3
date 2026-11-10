@@ -14,6 +14,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\TeacherScheduleExport;
 use App\Exports\CareerScheduleExport;
 use App\Exports\SemesterScheduleExport;
+use App\Services\ScheduleValidationService;
 use Carbon\Carbon;
 
 class ScheduleReportController extends Controller
@@ -106,9 +107,8 @@ class ScheduleReportController extends Controller
                     ->where('academic_period_id', $period->id)
                     ->where('status', 'active')
             )
-            ->orderByRaw("FIELD(day_of_week, 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday')")
-            ->orderBy('start_time')
             ->get();
+        $schedules = $this->sortByDay($schedules); // [CORREGIDO] sin FIELD() (solo MySQL)
 
         // Agrupar por día
         $groupedSchedules = $schedules->groupBy('day_of_week');
@@ -202,9 +202,8 @@ class ScheduleReportController extends Controller
                         fn($sq) => $sq->where('career_id', $careerId)
                     );
             })
-            ->orderByRaw("FIELD(day_of_week, 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday')")
-            ->orderBy('start_time')
             ->get();
+        $schedules = $this->sortByDay($schedules); // [CORREGIDO] sin FIELD() (solo MySQL)
 
         // Agrupar por día
         $groupedSchedules = $schedules->groupBy('day_of_week');
@@ -258,8 +257,35 @@ class ScheduleReportController extends Controller
     // NUEVOS REPORTES: VISTA CONSOLIDADA DIRECTA
     // ==========================================
 
+    /**
+     * [NUEVO] Parámetros de los consolidados (antes sin validar: un turno inexistente daba error 500).
+     */
+    private function validateConsolidated(Request $request): void
+    {
+        $request->validate([
+            'career' => 'required|integer|exists:careers,id',
+            'cycle' => 'required',
+            'shift' => 'required|integer|exists:shifts,id',
+            'period_id' => 'required|integer|exists:academic_periods,id',
+        ]);
+    }
+
+    /**
+     * [NUEVO] Orden lunes → sábado y por hora, en PHP (FIELD() solo existe en MySQL).
+     */
+    private function sortByDay($schedules)
+    {
+        return $schedules->sortBy(fn ($s) => sprintf(
+            '%d-%s',
+            array_search($s->day_of_week, ScheduleValidationService::DAYS, true),
+            $s->start_time->format('H:i')
+        ))->values();
+    }
+
     public function exportConsolidated(Request $request)
     {
+        $this->validateConsolidated($request);
+
         $careerId = $request->query('career');
         $cycle = $request->query('cycle');
         $shiftId = $request->query('shift');
@@ -272,6 +298,8 @@ class ScheduleReportController extends Controller
 
     public function exportConsolidatedPdf(Request $request)
     {
+        $this->validateConsolidated($request);
+
         $careerId = $request->query('career');
         $cycle = $request->query('cycle');
         $shiftId = $request->query('shift');
@@ -280,6 +308,7 @@ class ScheduleReportController extends Controller
         $schedules = Schedule::with(['teacherAssignment.teacher.user', 'teacherAssignment.didacticUnit', 'classroomResource'])
             ->whereHas('teacherAssignment', function ($q) use ($periodId, $shiftId, $cycle, $careerId) {
                 $q->where('academic_period_id', $periodId)
+                    ->where('status', 'active') // [CORREGIDO] solo secciones activas
                     ->where('shift_id', $shiftId)
                     ->whereHas('didacticUnit', function ($q2) use ($cycle, $careerId) {
                         $q2->where('semester', $cycle)

@@ -165,13 +165,17 @@ Route::prefix('academic-process')->middleware(['auth', 'verified'])->name('acade
     /* Route::get('schedules/export', [ScheduleReportController::class, 'download'])
         ->name('schedules.export'); */
 
+    // [CORREGIDO] Las exportaciones exigen el mismo permiso que la gestión de horarios
     Route::get('schedules/export', [ScheduleReportController::class, 'downloadPDF'])
+        ->middleware('permission:gestionar-horarios')
         ->name('schedules.export');
     // Rutas para exportación consolidada
     Route::get('schedules/export-consolidated', [ScheduleReportController::class, 'exportConsolidated'])
+        ->middleware('permission:gestionar-horarios')
         ->name('schedules.export-consolidated');
 
     Route::get('schedules/export-consolidated-pdf', [ScheduleReportController::class, 'exportConsolidatedPdf'])
+        ->middleware('permission:gestionar-horarios')
         ->name('schedules.export-consolidated-pdf');
 
     Route::get('syllabus-approval', SyllabusApproval::class)->middleware('permission:aprobar-silabos')->name('syllabus-approval');

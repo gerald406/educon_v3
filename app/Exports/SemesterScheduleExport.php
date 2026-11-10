@@ -29,6 +29,7 @@ class SemesterScheduleExport implements FromView, ShouldAutoSize, WithStyles
         $schedules = Schedule::with(['teacherAssignment.teacher.user', 'teacherAssignment.didacticUnit', 'classroomResource'])
             ->whereHas('teacherAssignment', function ($q) {
                 $q->where('academic_period_id', $this->periodId)
+                    ->where('status', 'active') // [CORREGIDO] solo secciones activas
                     ->where('shift_id', $this->shiftId)
                     ->whereHas('didacticUnit', function ($q2) {
                         $q2->where('semester', $this->cycle)

@@ -373,6 +373,71 @@ class ScheduleManagerTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // Vista consolidada (programa + semestre + turno)
+    // ------------------------------------------------------------------
+
+    private function consolidated(?User $as = null)
+    {
+        return Livewire::actingAs($as ?? $this->admin)
+            ->test(ScheduleManager::class)
+            ->call('setViewMode', 'consolidated')
+            ->set('selectedCareerId', $this->career->id)
+            ->set('filterCycleId', 1)
+            ->set('filterShiftId', $this->shift->id);
+    }
+
+    public function test_consolidated_ignores_inactive_assignments(): void
+    {
+        $active = $this->block($this->section($this->unit()), 'monday', '08:00', '10:00');
+        $suspended = $this->block($this->section($this->unit(), ['section' => 'B', 'status' => 'suspended']), 'monday', '10:00', '12:00');
+
+        $ids = $this->consolidated()->instance()->consolidatedSchedule->flatten()->pluck('id')->all();
+
+        $this->assertContains($active->id, $ids);
+        $this->assertNotContains($suspended->id, $ids);
+    }
+
+    public function test_progress_never_exceeds_100_with_two_sections(): void
+    {
+        $unit = $this->unit();
+        $this->block($this->section($unit), 'monday', '08:00', '10:00');
+        $this->block($this->section($unit, ['section' => 'B']), 'tuesday', '08:00', '10:00');
+
+        $stats = $this->consolidated()->instance()->progressStats;
+
+        $this->assertSame(1, $stats['total_courses']);
+        $this->assertSame(1, $stats['scheduled_courses']);
+        $this->assertSame(100, (int) $stats['percentage']);
+    }
+
+    public function test_consolidated_without_active_period_renders(): void
+    {
+        $this->period->update(['status' => 'planned']);
+
+        $this->consolidated()->assertOk()->assertSee('Vista Consolidada Semestral');
+    }
+
+    public function test_reset_semester_asks_confirmation_and_deletes_only_active(): void
+    {
+        $a = $this->block($this->section($this->unit()), 'monday', '08:00', '10:00');
+        $b = $this->block($this->section($this->unit()), 'tuesday', '08:00', '10:00');
+        $kept = $this->block($this->section($this->unit(), ['section' => 'B', 'status' => 'suspended']), 'monday', '10:00', '12:00');
+
+        $component = $this->consolidated()
+            ->call('confirmResetSemesterSchedules')
+            ->assertDispatched('swal:confirm', fn ($e, $p) => str_contains($p[0]['text'] ?? '', '2 bloques')
+                && ($p[0]['onConfirmed'] ?? null) === 'resetSemesterSchedules');
+
+        $this->assertSame(3, Schedule::count());
+
+        $component->dispatch('resetSemesterSchedules');
+
+        $this->assertNull($a->fresh());
+        $this->assertNull($b->fresh());
+        $this->assertNotNull($kept->fresh());
+    }
+
+    // ------------------------------------------------------------------
     // Carga académica: el buscador no debe conservar el curso/docente anterior
     // ------------------------------------------------------------------
 

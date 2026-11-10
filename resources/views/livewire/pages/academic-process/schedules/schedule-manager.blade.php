@@ -315,7 +315,8 @@
                             </div>
                             <div>
                                 {{-- Botón de Exportar Excel (Apunta a una ruta que crearemos luego en el Paso 3/4) --}}
-                                @if($selectedCareerId && $filterCycleId && $filterShiftId)
+                                {{-- [CORREGIDO] Sin periodo activo no hay enlaces (antes: error 500 por $activePeriod->id) --}}
+                                @if($activePeriod && $selectedCareerId && $filterCycleId && $filterShiftId)
                                     <div class="flex flex-wrap gap-2 items-center">
                                         {{-- Botón Excel --}}
                                         <a href="{{ route('academic-process.schedules.export-consolidated', [
@@ -352,8 +353,8 @@
                                         </a>
 
                                         {{-- Botón de reseteo --}}
-                                        <button wire:click="resetSemesterSchedules"
-                                                wire:confirm="¿Está seguro de eliminar TODOS los horarios del semestre {{ $filterCycleId }}? Esta acción no se puede deshacer."
+                                        {{-- [MODIFICADO] Confirmación con SweetAlert e indicando cuántos bloques se eliminan --}}
+                                        <button wire:click="confirmResetSemesterSchedules"
                                                 title="Reiniciar horarios del semestre"
                                                 aria-label="Reiniciar horarios del semestre {{ $filterCycleId }}"
                                                 class="bg-red-700 text-white p-2 rounded hover:bg-red-800 transition border-2 border-red-300">
