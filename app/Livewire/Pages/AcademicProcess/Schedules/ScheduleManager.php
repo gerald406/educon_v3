@@ -305,6 +305,20 @@ class ScheduleManager extends Component
         $this->end_time = $schedule->end_time->format('H:i');
         $this->classroom_resource_id = $schedule->classroom_resource_id ?? '';
         $this->resetValidation();
+
+        // [NUEVO] Si el aula del bloque ya no está disponible, no figura en el select:
+        // se quita del formulario y se avisa (antes el guardado fallaba sin forma clara de corregirlo).
+        if ($schedule->classroom_resource_id) {
+            $room = ClassroomResource::find($schedule->classroom_resource_id);
+            if (!$room || $room->status !== 'available') {
+                $this->classroom_resource_id = '';
+                $this->dispatch('swal', [
+                    'icon' => 'warning',
+                    'title' => 'Aula no disponible',
+                    'text' => 'El aula ' . ($room->name ?? '') . ' ya no está disponible: seleccione otra o deje el bloque sin aula antes de guardar.',
+                ]);
+            }
+        }
     }
 
     public function cancelEdit()

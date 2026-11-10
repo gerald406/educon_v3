@@ -327,6 +327,25 @@ class ScheduleManagerTest extends TestCase
         $this->assertNull($b->fresh()->classroom_resource_id);
     }
 
+    public function test_editing_block_with_unavailable_classroom_clears_it_and_warns(): void
+    {
+        $room = ClassroomResource::factory()->create(['name' => 'Aula 101']);
+        $a = $this->section($this->unit());
+        $b = $this->block($a, 'monday', '08:00', '10:00', $room->id);
+        $room->update(['status' => 'maintenance']);
+
+        $this->managerForTeacher()
+            ->call('editSchedule', $b->id)
+            ->assertSet('classroom_resource_id', '')
+            ->assertDispatched('swal', fn ($e, $p) => ($p[0]['icon'] ?? null) === 'warning' && str_contains($p[0]['text'] ?? '', 'Aula 101'))
+            ->set('end_time', '09:00')
+            ->call('saveSchedule')
+            ->assertDispatched('swal', fn ($e, $p) => ($p[0]['icon'] ?? null) === 'success');
+
+        $this->assertSame('09:00', $b->fresh()->end_time->format('H:i'));
+        $this->assertNull($b->fresh()->classroom_resource_id);
+    }
+
     public function test_use_shift_hours_fills_form(): void
     {
         $a = $this->section($this->unit());
