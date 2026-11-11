@@ -219,7 +219,8 @@ class TeacherDocumentsFlowTest extends TestCase
 
         Livewire::actingAs($user)
             ->test(NonTeachingSchedule::class)
-            ->assertSee('se cruza con la clase de Redes')
+            ->assertSee('ahora tiene clase de Redes')
+            ->assertSee('Sin cruces con sus clases')
             ->assertDontSee(route('teacher.non-teaching-schedule.excel'));
         $this->assertSame(8, $plan->blocks()->count()); // no se borra nada
         $this->actingAs($user)->get(route('teacher.non-teaching-schedule.activity-program-pdf'))

@@ -372,10 +372,10 @@ class NonTeachingScheduleTest extends TestCase
         $this->assertSame(180, $activity->weekly_minutes);
         $this->assertSame($this->teacher->id, $activity->plan->teacher_id);
 
-        $component->call('placeBlock', 'monday', '13:00'); // sin actividad seleccionada: no ubica
-        $this->assertSame(0, NonTeachingBlock::count());
-
-        $component->call('selectActivity', $activity->id)->call('placeBlock', 'monday', '13:00');
+        // La actividad recién guardada queda seleccionada: la casilla se ubica sin más pasos
+        $component->assertSet('selectedActivityId', $activity->id)
+            ->assertSee('Ubicando en la semana')
+            ->call('placeBlock', 'monday', '13:00');
         $block = NonTeachingBlock::firstOrFail();
         $this->assertSame($activity->id, $block->teacher_non_teaching_activity_id);
 
@@ -398,7 +398,8 @@ class NonTeachingScheduleTest extends TestCase
             ->test(NonTeachingSchedule::class)
             ->assertDontSee('Actividad del otro docente')
             ->call('selectActivity', $otherActivity->id)
-            ->assertSet('selectedActivityId', null)
+            // No queda seleccionada la actividad ajena (se propone una propia con horas pendientes)
+            ->assertNotSet('selectedActivityId', $otherActivity->id)
             ->call('removeBlock', $otherBlock->id)
             ->call('removeActivity', $otherActivity->id)
             ->call('editActivity', $otherActivity->id)
@@ -433,6 +434,102 @@ class NonTeachingScheduleTest extends TestCase
             ->call('saveActivity');
 
         $this->assertSame(0, NonTeachingPlan::count());
+    }
+
+    // --- Requisitos para descargar y ayudas de la pantalla ---
+
+    public function test_checks_explain_what_is_missing_and_who_fixes_it(): void
+    {
+        $this->lective(10); // preparación 2.5 h; faltan 27.5 h
+        $this->plan();
+
+        $summary = $this->summary();
+        $checks = $summary['checks'];
+
+        $this->assertFalse($summary['blocked_by_load']);
+        $this->assertTrue($checks['load']['ok']);
+        $this->assertTrue($checks['conflicts']['ok']);
+        $this->assertFalse($checks['sub_activities']['ok']);
+        $this->assertStringContainsString('Describir', $checks['sub_activities']['details'][0]);
+        $this->assertSame('Jornada completa: 12.5 de 40 horas', $checks['total']['label']);
+        $this->assertStringContainsString('Faltan 27.5 h', $checks['total']['details'][0]);
+        $this->assertSame('teacher', $checks['total']['who']);
+        $this->assertSame('Horas ubicadas en la semana: 0 de 2.5', $checks['placed']['label']);
+        $this->assertStringContainsString('Ubicar en la semana', $checks['placed']['details'][0]);
+    }
+
+    public function test_load_above_workday_is_flagged_as_not_fixable_by_the_teacher(): void
+    {
+        $this->lective(35); // 35 + 9 de preparación = 44 > 40
+        $this->plan();
+
+        $summary = $this->summary();
+
+        $this->assertTrue($summary['blocked_by_load']);
+        $this->assertFalse($summary['is_complete']);
+        $this->assertSame('office', $summary['checks']['load']['who']);
+        $this->assertStringContainsString('35 h lectivas más 9 h de preparación de clases suman 44 h', $summary['checks']['load']['details'][0]);
+        $this->assertSame('office', $summary['checks']['total']['who']);
+
+        Livewire::actingAs($this->teacher->user)
+            ->test(NonTeachingSchedule::class)
+            ->assertSee('la causa no depende de usted')
+            ->assertSee('Lo resuelve el área académica')
+            ->assertSee('Horario no lectivo (Excel)') // el botón se ve, deshabilitado
+            ->assertDontSee(route('teacher.non-teaching-schedule.excel'));
+    }
+
+    public function test_all_checks_pass_when_plan_is_complete(): void
+    {
+        $this->teacher->update(['workday_type' => 'part_time']);
+        $this->lective(16);
+        $plan = $this->plan();
+        $preparation = $this->preparation($plan);
+        $this->service->saveActivity($plan, $preparation->id, '', 'Planificación de sesiones', null);
+        foreach (['08:00', '09:00', '10:00', '11:00'] as $time) {
+            $this->service->placeBlock($plan, $preparation->id, 'friday', $time);
+        }
+
+        $this->assertSame([true, true, true, true, true], array_column($this->summary()['checks'], 'ok'));
+
+        Livewire::actingAs($this->teacher->user)
+            ->test(NonTeachingSchedule::class)
+            ->assertSee('ya puede descargar')
+            ->assertSee('Requisitos cumplidos: 5 de 5')
+            ->assertSee(route('teacher.non-teaching-schedule.excel'));
+    }
+
+    public function test_page_selects_pending_activity_and_moves_to_the_next_one(): void
+    {
+        $this->lective(8); // preparación 2 h
+        $plan = $this->plan();
+        $preparation = $this->preparation($plan);
+        $this->service->saveActivity($plan, null, 'other', 'Comisión de inventario', 1);
+        $other = $plan->activities()->where('activity', 'other')->first();
+
+        Livewire::actingAs($this->teacher->user)
+            ->test(NonTeachingSchedule::class)
+            ->assertSet('selectedActivityId', $preparation->id) // primera con horas pendientes
+            ->call('placeBlock', 'monday', '13:00')
+            ->assertSet('selectedActivityId', $preparation->id) // aún le falta 1 h
+            ->call('placeBlock', 'monday', '14:00')
+            ->assertSet('selectedActivityId', $other->id)       // terminó: pasa a la siguiente
+            ->call('placeBlock', 'tuesday', '13:00');
+
+        $this->assertSame(2, $preparation->blocks()->count());
+        $this->assertSame(1, $other->blocks()->count());
+    }
+
+    public function test_new_activity_form_proposes_the_missing_hours(): void
+    {
+        $this->teacher->update(['workday_type' => 'part_time']);
+        $this->lective(12); // 12 + 3 de preparación: faltan 5
+
+        Livewire::actingAs($this->teacher->user)
+            ->test(NonTeachingSchedule::class)
+            ->call('newActivity')
+            ->assertSet('showForm', true)
+            ->assertSet('hours', '5');
     }
 
     // --- Ficha del docente ---

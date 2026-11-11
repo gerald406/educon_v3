@@ -237,8 +237,13 @@ class NonTeachingScheduleService
             );
         }
 
+        $checks = $this->checks($rows, $blocks, $lectiveHours, $workdayHours, $nonTeachingMinutes);
+
         return [
             'plan_id' => $plan?->id,
+            'checks' => $checks,
+            // true si el docente no puede completar el horario por sí mismo (lo corrige el área académica)
+            'blocked_by_load' => ! $checks['load']['ok'],
             'workday_hours' => $workdayHours,
             'workday_label' => self::WORKDAY_LABELS[$teacher->workday_type] ?? self::WORKDAY_LABELS['full_time'],
             'lective_hours' => $lectiveHours,
@@ -255,6 +260,103 @@ class NonTeachingScheduleService
             'has_program' => $teacher->career_id !== null,
             'issues' => $issues,
             'is_complete' => $plan !== null && $issues === [],
+        ];
+    }
+
+    /**
+     * [NUEVO] Requisitos para descargar los documentos, en el orden en que el docente los
+     * resuelve. Cada uno: label, ok, details (qué falta y cómo corregirlo) y who
+     * ('teacher' si lo corrige el docente, 'office' si depende del área académica).
+     * Es la misma información de `issues`, organizada para mostrarla como lista de pasos.
+     */
+    private function checks(array $rows, array $blocks, int $lectiveHours, int $workdayHours, int $nonTeachingMinutes): array
+    {
+        $workdayMinutes = $workdayHours * 60;
+        $preparation = $this->preparationMinutes($lectiveHours);
+        $difference = $workdayMinutes - ($lectiveHours * 60 + $nonTeachingMinutes);
+
+        // 1. Carga lectiva: no depende del docente
+        $load = [];
+        if ($lectiveHours < self::MIN_LECTIVE_HOURS) {
+            $load[] = sprintf(
+                'Tiene %d h lectivas y el Anexo 2 asigna horas de preparación de clases desde %d. Solicite al área académica que revise su carga.',
+                $lectiveHours,
+                self::MIN_LECTIVE_HOURS
+            );
+        } elseif ($lectiveHours * 60 + $preparation > $workdayMinutes) {
+            $load[] = sprintf(
+                'Sus %d h lectivas más %s h de preparación de clases suman %s h y superan su jornada de %d h. '
+                .'Usted no puede corregirlo desde aquí: solicite al área académica que revise su carga lectiva o su condición laboral.',
+                $lectiveHours,
+                $this->formatHours($preparation),
+                $this->formatHours($lectiveHours * 60 + $preparation),
+                $workdayHours
+            );
+        }
+
+        // 2. Subactividades
+        $subActivities = [];
+        foreach ($rows as $row) {
+            if ($row['minutes'] > 0 && trim($row['sub_activity']) === '') {
+                $subActivities[] = "{$row['label']}: pulse «".($row['is_preparation'] ? 'Describir' : 'Editar').'» y escriba qué realizará.';
+            }
+        }
+
+        // 3. Jornada exacta
+        $total = [];
+        if ($load !== [] && $difference < 0) {
+            $total[] = 'Se resolverá cuando el área académica corrija su carga lectiva.';
+        } elseif ($difference > 0) {
+            $total[] = sprintf('Faltan %s h: agregue una actividad o aumente las horas de una existente.', $this->formatHours($difference));
+        } elseif ($difference < 0) {
+            $total[] = sprintf('Sobran %s h: reduzca las horas de una actividad.', $this->formatHours(-$difference));
+        }
+
+        // 4. Horas ubicadas en la semana
+        $placed = [];
+        $placedMinutes = 0;
+        foreach ($rows as $row) {
+            $placedMinutes += min($row['placed_minutes'], $row['minutes']);
+            if ($row['placed_minutes'] < $row['minutes']) {
+                $placed[] = sprintf('%s: faltan ubicar %s h. Pulse «Ubicar en la semana» y elija casillas libres.', $row['label'], $this->formatHours($row['minutes'] - $row['placed_minutes']));
+            } elseif ($row['placed_minutes'] > $row['minutes']) {
+                $placed[] = sprintf('%s: hay %s h ubicadas de más. Elimine un bloque de la semana con el icono rojo.', $row['label'], $this->formatHours($row['placed_minutes'] - $row['minutes']));
+            }
+        }
+
+        // 5. Cruces con clases
+        $conflicts = [];
+        foreach ($blocks as $block) {
+            if ($block['conflict']) {
+                $conflicts[] = sprintf(
+                    '%s, %s de %s a %s: ahora tiene clase de %s. Elimínelo con el icono rojo y ubíquelo en otra hora.',
+                    $block['label'],
+                    mb_strtolower(self::DAY_LABELS[$block['day']] ?? $block['day']),
+                    $this->toTime($block['start']),
+                    $this->toTime($block['end']),
+                    $block['conflict']
+                );
+            }
+        }
+
+        $check = fn (string $label, array $details, string $who = 'teacher') => [
+            'label' => $label, 'ok' => $details === [], 'details' => $details, 'who' => $who,
+        ];
+
+        return [
+            'load' => $check('Carga lectiva compatible con su jornada', $load, 'office'),
+            'sub_activities' => $check('Subactividades descritas', $subActivities),
+            'total' => $check(sprintf(
+                'Jornada completa: %s de %d horas',
+                $this->formatHours($lectiveHours * 60 + $nonTeachingMinutes),
+                $workdayHours
+            ), $total, $load !== [] && $difference < 0 ? 'office' : 'teacher'),
+            'placed' => $check(sprintf(
+                'Horas ubicadas en la semana: %s de %s',
+                $this->formatHours($placedMinutes),
+                $this->formatHours($nonTeachingMinutes)
+            ), $placed),
+            'conflicts' => $check('Sin cruces con sus clases', $conflicts),
         ];
     }
 

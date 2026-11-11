@@ -86,10 +86,20 @@ class NonTeachingSchedule extends Component
     // Actividades
     // ------------------------------------------------------------------
 
-    public function newActivity(): void
+    public function newActivity(NonTeachingScheduleService $service): void
     {
         $this->resetForm();
         $this->showForm = true;
+
+        // [NUEVO] Propone las horas que faltan para completar la jornada
+        $teacher = $this->teacher();
+        $period = $this->period();
+        if ($teacher && $period) {
+            $missing = $service->summary($teacher, $period)['difference_minutes'];
+            if ($missing >= 60) {
+                $this->hours = $service->formatHours($missing);
+            }
+        }
     }
 
     public function editActivity($id, NonTeachingScheduleService $service): void
@@ -128,8 +138,14 @@ class NonTeachingSchedule extends Component
             return;
         }
 
+        // [NUEVO] La actividad guardada queda seleccionada para ubicar sus horas enseguida
+        $saved = $this->editingActivityId
+            ? $plan->activities()->find($this->editingActivityId)
+            : $plan->activities()->where('activity', $this->activity)->first();
+        $this->selectedActivityId = $saved?->id;
+
         $this->resetForm();
-        $this->dispatch('swal', ['icon' => 'success', 'title' => 'Guardado', 'text' => 'Actividad registrada. Ahora ubique sus horas en la semana.']);
+        $this->dispatch('swal', ['icon' => 'success', 'title' => 'Guardado', 'text' => 'Ahora ubique sus horas en la semana: pulse las casillas libres.']);
     }
 
     public function cancelForm(): void
@@ -210,7 +226,12 @@ class NonTeachingSchedule extends Component
 
         if ($error = $service->placeBlock($plan, (int) $this->selectedActivityId, (string) $day, (string) $time)) {
             $this->dispatch('swal', ['icon' => 'warning', 'title' => 'No se puede ubicar aquí', 'text' => $error]);
+
+            return;
         }
+
+        // [NUEVO] Al terminar de ubicar una actividad se pasa sola a la siguiente con horas pendientes
+        $this->selectNextPending($service, keepCurrent: true);
     }
 
     public function removeBlock($id, NonTeachingScheduleService $service): void
@@ -221,10 +242,43 @@ class NonTeachingSchedule extends Component
         }
     }
 
+    /**
+     * [NUEVO] Selecciona la primera actividad con horas por ubicar. Con $keepCurrent, solo
+     * cambia si la seleccionada ya no tiene horas pendientes.
+     */
+    private function selectNextPending(NonTeachingScheduleService $service, bool $keepCurrent = false): void
+    {
+        $teacher = $this->teacher();
+        $period = $this->period();
+        if (! $teacher || ! $period) {
+            return;
+        }
+
+        $activities = collect($service->summary($teacher, $period)['activities']);
+        $pending = fn (array $a) => $a['placed_minutes'] < $a['minutes'];
+
+        $current = $activities->firstWhere('id', (int) $this->selectedActivityId);
+        if ($keepCurrent && $current && $pending($current)) {
+            return;
+        }
+
+        $next = $activities->first($pending);
+        if ($next) {
+            $this->selectedActivityId = $next['id'];
+        } elseif (! $current) {
+            $this->selectedActivityId = null;
+        }
+    }
+
     public function render(NonTeachingScheduleService $service)
     {
         $teacher = $this->teacher();
         $period = $this->period();
+
+        // Sin selección, se propone la primera actividad con horas pendientes
+        if (! $this->selectedActivityId) {
+            $this->selectNextPending($service);
+        }
 
         return view('livewire.pages.teacher.non-teaching-schedule', [
             'teacher' => $teacher,
