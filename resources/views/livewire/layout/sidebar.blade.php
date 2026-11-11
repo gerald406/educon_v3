@@ -1,9 +1,18 @@
-<div class="h-screen w-64 bg-gray-800 text-white p-4 overflow-y-auto">
+{{-- [MODIFICADO] educon-sidebar: desplazamiento solo vertical con barra delgada (CSS en layouts/app) --}}
+<div class="educon-sidebar h-screen w-64 bg-gray-800 text-white p-4">
     <div class="flex items-center mb-6">
         <a href="{{ route('dashboard') }}">
             <x-application-mark class="block h-10 w-auto" />
         </a>
         <span class="ms-3 text-xl font-semibold">Educon</span>
+
+        {{-- [NUEVO] Colapsar el sidebar (escritorio). toggleSidebar() vive en layouts/app --}}
+        <button type="button" class="educon-sidebar-toggle" @click="toggleSidebar()"
+                title="Ocultar menú" aria-label="Ocultar menú lateral">
+            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+            </svg>
+        </button>
     </div>
 
     <nav class="space-y-1">

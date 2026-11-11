@@ -122,6 +122,15 @@ class User extends Authenticatable
     }
 
     /**
+     * [NUEVO] Docente o Coordinador sin acceso administrativo: navega con el sidebar del
+     * docente (layouts/partials/teacher-sidebar) en lugar de los enlaces de la barra superior.
+     */
+    public function usesTeacherSidebar(): bool
+    {
+        return $this->isTeacher() && ! $this->hasAdminAccess();
+    }
+
+    /**
      * Determina si el usuario es EXCLUSIVAMENTE un estudiante
      * (NO un usuario administrativo)
      */

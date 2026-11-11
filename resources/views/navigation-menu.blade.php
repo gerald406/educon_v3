@@ -4,9 +4,10 @@
         <div class="flex justify-between h-16">
             <div class="flex">
                 
-                <!-- Hamburger (Para usuarios con acceso administrativo en móvil) -->
-                @if(Auth::user()->hasAdminAccess())
-                    <div class="-me-2 flex items-center sm:hidden">
+                <!-- Hamburger del sidebar (administrativo o del docente) en móvil y tablet -->
+                {{-- [MODIFICADO] También para el sidebar del docente; visible hasta md, que es donde aparece el sidebar fijo --}}
+                @if(Auth::user()->hasAdminAccess() || Auth::user()->usesTeacherSidebar())
+                    <div class="-me-2 flex items-center md:hidden">
                         <button @click="sidebarOpen = ! sidebarOpen" class="inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:bg-gray-100 focus:text-gray-500 transition duration-150 ease-in-out">
                             <svg class="size-6" stroke="currentColor" fill="none" viewBox="0 0 24 24">
                                 <path :class="{'hidden': sidebarOpen, 'inline-flex': ! sidebarOpen }" class="inline-flex" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
@@ -16,8 +17,8 @@
                     </div>
                 @endif
                 
-                <!-- Logo (Para usuarios SIN acceso administrativo) -->
-                @if(!Auth::user()->hasAdminAccess())
+                <!-- Logo (Para usuarios SIN sidebar: el sidebar ya lo muestra) -->
+                @if(!Auth::user()->hasAdminAccess() && !Auth::user()->usesTeacherSidebar())
                     <div class="shrink-0 flex items-center">
                         <a href="{{ route('dashboard') }}">
                             <x-application-mark class="block h-9 w-auto" />
@@ -36,7 +37,9 @@
                     @endif
                     
                     {{-- Vista de Docentes --}}
-                    @if(Auth::user()->isTeacher())
+                    {{-- [MODIFICADO] Con sidebar del docente estos enlaces viven en layouts/partials/teacher-sidebar;
+                         aquí quedan solo para un Administrador que además es docente --}}
+                    @if(Auth::user()->isTeacher() && !Auth::user()->usesTeacherSidebar())
                         <x-nav-link href="{{ route('dashboard') }}" :active="request()->routeIs('dashboard')">
                             {{ __('Dashboard') }}
                         </x-nav-link>
@@ -192,7 +195,8 @@
             @endif
 
             {{-- Menú Responsive para Docentes --}}
-            @if(Auth::user()->isTeacher())
+            {{-- [MODIFICADO] Con sidebar del docente, sus opciones están en el sidebar --}}
+            @if(Auth::user()->isTeacher() && !Auth::user()->usesTeacherSidebar())
                 <x-responsive-nav-link href="{{ route('dashboard') }}" :active="request()->routeIs('dashboard')">
                     {{ __('Dashboard') }}
                 </x-responsive-nav-link>
