@@ -69,6 +69,7 @@ use App\Http\Controllers\Teacher\LearningSessionPdfController;
 use App\Http\Controllers\Teacher\SyllabusPdfController;
 use App\Http\Controllers\Teacher\TeacherDocumentController;
 use App\Livewire\Pages\Teacher\MySchedule;
+use App\Livewire\Pages\Teacher\NonTeachingSchedule;
 use App\Livewire\Pages\AcademicProcess\EnrollmentListManager;
 use App\Livewire\Pages\AcademicProcess\EnrollmentReservationManager;
 use App\Livewire\Pages\AcademicProcess\RegularEnrollmentManager;
@@ -238,6 +239,13 @@ Route::prefix('teacher')->middleware(['auth', 'verified', 'role:Docente|Coordina
     Route::get('my-schedule', MySchedule::class)->name('my-schedule');
     Route::get('my-schedule/personal-excel', [TeacherDocumentController::class, 'personalSchedule'])
         ->name('my-schedule.personal-excel');
+
+    // [NUEVO] Horario no lectivo del docente autenticado
+    Route::get('non-teaching-schedule', NonTeachingSchedule::class)->name('non-teaching-schedule');
+    Route::get('non-teaching-schedule/excel', [TeacherDocumentController::class, 'nonTeachingSchedule'])
+        ->name('non-teaching-schedule.excel');
+    Route::get('non-teaching-schedule/activity-program-pdf', [TeacherDocumentController::class, 'activityProgram'])
+        ->name('non-teaching-schedule.activity-program-pdf');
 
     Route::get('activities', ActivityManager::class)->middleware('permission:gestionar-actividades')->name('activities');
     Route::get('submissions', SubmissionReview::class)->middleware('permission:revisar-entregas')->name('submissions');

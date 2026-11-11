@@ -25,6 +25,8 @@ class Teacher extends Model
         'professional_experience',
         'cv_url',
         'contract_type',
+        'workday_type', // [NUEVO] 'full_time' (40 h) | 'part_time' (20 h)
+        'career_id',    // [NUEVO] Programa de estudios de adscripción (documentos oficiales)
         'hire_date',
         'preparation_day',
         'status',
@@ -36,6 +38,14 @@ class Teacher extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    /**
+     * [NUEVO] Programa de estudios al que está adscrito el docente (opcional).
+     */
+    public function career(): BelongsTo
+    {
+        return $this->belongsTo(Career::class);
     }
 
     /**

@@ -17,7 +17,7 @@ class CareerActionTest extends TestCase
     public function test_create_career_action_creates_career()
     {
         $institution = Institution::factory()->create(['status' => 'active']);
-        
+
         $input = [
             'institution_id' => $institution->id,
             'code' => 'SOFT-01',
@@ -27,7 +27,7 @@ class CareerActionTest extends TestCase
             'status' => 'active',
         ];
 
-        $career = (new CreateCareer())->create($input);
+        $career = (new CreateCareer)->create($input);
 
         $this->assertInstanceOf(Career::class, $career);
         $this->assertDatabaseHas('careers', ['code' => 'SOFT-01']);
@@ -36,8 +36,8 @@ class CareerActionTest extends TestCase
     public function test_create_career_action_validates_required_fields()
     {
         $this->expectException(ValidationException::class);
-        
-        (new CreateCareer())->create([]);
+
+        (new CreateCareer)->create([]);
     }
 
     public function test_update_career_action_updates_fields()
@@ -57,7 +57,7 @@ class CareerActionTest extends TestCase
             'status' => 'active',
         ];
 
-        (new UpdateCareer())->update($career, $input);
+        (new UpdateCareer)->update($career, $input);
 
         $this->assertDatabaseHas('careers', ['id' => $career->id, 'name' => 'New Name']);
     }
@@ -65,7 +65,7 @@ class CareerActionTest extends TestCase
     public function test_update_career_allows_same_code()
     {
         $career = Career::factory()->create(['code' => 'CODE-1']);
-        
+
         $input = [
             'institution_id' => $career->institution_id,
             'code' => 'CODE-1', // Same code
@@ -76,8 +76,8 @@ class CareerActionTest extends TestCase
         ];
 
         // Should not throw validation exception
-        (new UpdateCareer())->update($career, $input);
-        
+        (new UpdateCareer)->update($career, $input);
+
         $this->assertTrue(true);
     }
 }

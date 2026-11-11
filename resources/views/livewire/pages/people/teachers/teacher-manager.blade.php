@@ -64,6 +64,8 @@
                                         @endphp
                                         
                                         <div class="font-medium">{{ $tipoContrato }}</div>
+                                        {{-- [NUEVO] Condición laboral --}}
+                                        <div class="text-xs text-gray-500">{{ $teacher->workday_type === 'part_time' ? 'Tiempo parcial (20 h)' : 'Tiempo completo (40 h)' }}</div>
                                         <div class="text-xs text-gray-400">Prep: {{ $diaPrep }}</div>
                                     </td>
                                     <td class="px-6 py-4">
@@ -198,6 +200,26 @@
                                 <option value="friday">Viernes</option>
                             </select>
                         </div>
+                    </div>
+                    {{-- [NUEVO] Jornada para la suma de horas lectivas y no lectivas --}}
+                    <div>
+                        <x-label value="Condición laboral" />
+                        <select wire:model="workday_type" class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <option value="full_time">Tiempo completo (40 horas)</option>
+                            <option value="part_time">Tiempo parcial (20 horas)</option>
+                        </select>
+                        <x-input-error for="workday_type" class="mt-1" />
+                    </div>
+                    {{-- [NUEVO] Programa que figura en el horario no lectivo y la programación de actividades --}}
+                    <div>
+                        <x-label value="Programa de estudios (adscripción)" />
+                        <select wire:model="career_id" class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                            <option value="">Sin definir</option>
+                            @foreach ($careers as $career)
+                                <option value="{{ $career->id }}">{{ $career->name }}</option>
+                            @endforeach
+                        </select>
+                        <x-input-error for="career_id" class="mt-1" />
                     </div>
                     <div>
                         <x-label value="Fecha Contratación" />

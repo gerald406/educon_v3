@@ -44,6 +44,8 @@ class TeacherManager extends Component
     public $academic_degree  = '';
     public $specialty        = '';
     public $contract_type    = 'contracted';
+    public $workday_type     = 'full_time'; // [NUEVO] Condición laboral: jornada de 40 h o 20 h
+    public $career_id        = '';          // [NUEVO] Programa de adscripción (documentos oficiales)
     public $hire_date        = '';
     public $preparation_day  = 'monday';
     public $status           = 'active';
@@ -106,6 +108,8 @@ class TeacherManager extends Component
                 Rule::unique('teachers', 'code')->ignore($teacherId)
             ],
             'contract_type'    => 'required|in:permanent,contracted,hourly',
+            'workday_type'     => 'required|in:full_time,part_time',
+            'career_id'        => 'nullable|exists:careers,id',
             'status'           => 'required|in:active,leave,terminated',
         ];
 
@@ -226,6 +230,8 @@ class TeacherManager extends Component
         $this->academic_degree = $teacher->academic_degree;
         $this->specialty       = $teacher->specialty;
         $this->contract_type   = $teacher->contract_type;
+        $this->workday_type    = $teacher->workday_type ?: 'full_time';
+        $this->career_id       = $teacher->career_id ?? '';
         $this->hire_date       = $teacher->hire_date;
         $this->preparation_day = $teacher->preparation_day;
         $this->status          = $teacher->status;
@@ -350,6 +356,8 @@ class TeacherManager extends Component
                     'academic_degree' => $this->academic_degree,
                     'specialty'      => $this->specialty,
                     'contract_type'  => $this->contract_type,
+                    'workday_type'   => $this->workday_type,
+                    'career_id'      => $this->career_id ?: null,
                     'hire_date'      => $this->hire_date ?: null,
                     'preparation_day' => $this->preparation_day ?: null,
                     'status'         => $this->status,
@@ -426,6 +434,8 @@ class TeacherManager extends Component
         $this->academic_degree  = '';
         $this->specialty        = '';
         $this->contract_type    = 'contracted';
+        $this->workday_type     = 'full_time';
+        $this->career_id        = '';
         $this->hire_date        = '';
         $this->preparation_day  = 'monday';
         $this->status           = 'active';

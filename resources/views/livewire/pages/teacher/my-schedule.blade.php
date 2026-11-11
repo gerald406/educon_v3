@@ -33,10 +33,16 @@
                             · {{ count($schedule['rows']) }} {{ count($schedule['rows']) === 1 ? 'sección' : 'secciones' }}
                         </p>
                     </div>
-                    <a href="{{ route('teacher.my-schedule.personal-excel') }}"
-                        class="inline-flex items-center justify-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded shadow">
-                        Descargar horario personal (Excel)
-                    </a>
+                    <div class="flex flex-col sm:flex-row gap-2">
+                        <a href="{{ route('teacher.non-teaching-schedule') }}"
+                            class="inline-flex items-center justify-center px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-bold rounded shadow-sm">
+                            Horario no lectivo
+                        </a>
+                        <a href="{{ route('teacher.my-schedule.personal-excel') }}"
+                            class="inline-flex items-center justify-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded shadow">
+                            Descargar horario personal (Excel)
+                        </a>
+                    </div>
                 </div>
 
                 {{-- Avisos: no impiden la descarga --}}

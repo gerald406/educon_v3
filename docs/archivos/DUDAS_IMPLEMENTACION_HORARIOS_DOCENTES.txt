@@ -1,435 +1,456 @@
 ================================================================================
-DUDAS DE IMPLEMENTACIÓN — DOCUMENTOS OFICIALES Y HORARIOS DEL DOCENTE
-EduCON · Etapa 1 (análisis) · 10/11/2026
+DUDAS DE IMPLEMENTACIÓN — HORARIO NO LECTIVO Y PROGRAMACIÓN DE ACTIVIDADES
+EduCON · Etapa 2 (análisis) · versión 2 · 10/11/2026
 ================================================================================
 
 Cómo responder: escriba su respuesta en la línea "RESPUESTA:" de cada pregunta.
-Si elige una de las opciones basta con la letra (ej. "RESPUESTA: B").
-Las preguntas marcadas con [BLOQUEANTE] impiden iniciar el desarrollo de la parte
-indicada; las demás tienen una opción por defecto señalada con (sugerida).
+Si elige una opción basta con la letra (ej. "RESPUESTA: B").
+[BLOQUEANTE] = sin esa respuesta no puedo iniciar la parte indicada.
+(sugerida) = opción que aplicaré si usted responde "sugerida" o "ok".
 
-Plantillas analizadas (docs/archivos):
-  - HOARARIO_PERSONAL.xlsx        (hoja HORARIO_PERSONAL)
-  - HORARIO NO LECTIVO.xlsx       (hoja MODELO)
+Esta versión reemplaza a la anterior. Los apartados A y B (horas pedagógicas y
+horario personal en Excel) ya fueron respondidos e implementados; sus respuestas
+quedaron guardadas en el historial de git (commit d3226f9) y se resumen en la
+sección 0 solo como referencia. Las preguntas se numeran de nuevo desde 1.
+
+Archivos analizados para esta etapa (docs/archivos):
+  - anexo2.JPG  (ANEXO 2: horas no lectivas para preparación de clases)
+  - HORARIO NO LECTIVO.xlsx  (hoja MODELO)
   - PROGRAMACIÓN DE ACTIVIDADES ACADEMICAS DEL DOCENTE.docx
-  - HOARARIO_SEMESTRAL.xlsx       (fuera de alcance por ahora; solo se revisó)
+Módulos analizados: gestión de docentes (people/teachers), carga académica,
+gestión de horarios y "Mi Horario" del docente.
 
 
 ================================================================================
-A. HORAS PEDAGÓGICAS Y FRANJAS HORARIAS
+0. LO QUE YA ESTÁ DEFINIDO (no requiere respuesta; corrija si algo está mal)
 ================================================================================
 
-1. [BLOQUEANTE: horario personal] ¿Cuáles son las franjas horarias oficiales?
-   Pregunta: Confirmar la tabla exacta de horas pedagógicas por turno.
-   Contexto: La plantilla del horario personal trae filas fijas:
-       Mañana (45 min): 08:00-08:45, 08:45-09:30, 09:30-10:15, 10:15-11:00,
-                        [receso 11:00-11:30], 11:30-12:15, 12:15-13:00
-       Noche  (40 min): 17:00-17:40, 17:40-18:20, 18:20-19:00, 19:00-19:40,
-                        19:40-20:20, 20:20-21:00
-     En el sistema, en cambio, los bloques de horario se registran con hora de
-     inicio y fin libres (no hay franjas), y los turnos registrados en la BD
-     local son: Diurno 08:00-12:30, Turno Tarde 13:30-18:00, Nocturno 18:30-22:30.
-     No coinciden con la plantilla (la mañana de la plantilla termina 13:00 y la
-     noche va de 17:00 a 21:00; además no hay filas para el turno tarde).
-   Impacto: Ubicación de cada bloque en las celdas del Excel; turnos; grilla del
-     docente.
-   Opciones:
-     A) Las franjas de la plantilla son las oficiales: se corrigen los turnos en
-        el módulo de turnos (dato, no código) y el sistema usa esa tabla. (sugerida)
-     B) Las franjas dependen del turno/periodo y deben poder configurarse.
-     C) Otra tabla de franjas (indicarla).
-   RESPUESTA:A
+0.1 Ya implementado (apartados A y B anteriores)
+  - Franjas lectivas oficiales: mañana 6 horas de 45 min (08:00-13:00, receso
+    11:00-11:30) y noche 6 horas de 40 min (17:00-21:00). Lunes a viernes.
+  - La carga lectiva del docente = suma de horas semanales de sus UD asignadas
+    (secciones activas del periodo activo), contadas en horas pedagógicas.
+  - Horario personal en Excel disponible en "Mi Horario".
 
-2. ¿Los turnos de producción coinciden con los de mi copia local?
-   Pregunta: Indicar nombre y horas de inicio/fin de los turnos en producción, y
-     si existe turno tarde.
-   Contexto: Solo veo la BD local. La plantilla solo tiene bloque de mañana y de
-     noche.
-   Impacto: Filas del Excel y validación "bloque dentro del turno" ya existente.
-   RESPUESTA: solo turnos mañana y noche (Diurno	08:00 AM	13:00 PM	y Nocturno	17:00 PM	21:00 PM
+0.2 Reglas que usted indicó para el horario no lectivo (así las entendí)
+  R1. Hay 8 actividades fijas: Diseño y desarrollo académico; Desarrollo
+      institucional; Estrategias de articulación con el sector productivo;
+      Investigación e innovación; Preparación de clases; Seguimiento y servicios
+      de apoyo al estudiante y egresado; S.E.F.S.R.T.; Otras actividades.
+  R2. PREPARACIÓN DE CLASES es obligatoria y sus horas se calculan solas a
+      partir de la carga lectiva, según el ANEXO 2.
+  R3. Máximo 4 actividades en total (Preparación + hasta 3 más). También vale
+      registrar 2 o 3 en total.
+  R4. Lectivas + no lectivas respetan la jornada: 40 h (tiempo completo) o 20 h
+      (tiempo parcial). Se agrega ese dato a la ficha del docente.
+  R5. Cada actividad seleccionada lleva una SUBACTIVIDAD: texto libre de hasta
+      255 caracteres, con sus horas semanales y los días en que se desarrolla.
+  R6. Las horas no lectivas se cuentan en bloques de 60 minutos.
+  R7. Las horas no lectivas no pueden superponerse con las lectivas.
 
-3. [BLOQUEANTE: totales] ¿Una "hora semanal" de la UD es una hora pedagógica
-   (45/40 min) o una hora cronológica (60 min)?
-   Contexto: Hoy la gestión de horarios valida que los bloques de una sección no
-     superen weekly_hours x 60 minutos. Con horas pedagógicas de 45 min, una UD de
-     3 h ocupa 135 min, no 180. La plantilla cuenta por franjas (1 fila = 1 hora).
-   Impacto: Cálculo de carga lectiva, total de 40 h y el validador actual de
-     horarios (cambiarlo afecta un módulo en producción: se haría solo si usted
-     lo autoriza).
-   Opciones:
-     A) Hora pedagógica: 1 franja = 1 hora, sea de 45 o 40 min. (sugerida, es lo
-        que muestra la plantilla)
-     B) Hora cronológica de 60 min.
-   RESPUESTA: la hora pedagogica en la mañan es de 45 minutos en la noche es de 40 minutos 
-
-4. ¿Qué hacer con los bloques ya registrados que no calzan con las franjas?
-   Contexto: En la BD local hay bloques como 08:00-09:30 y 08:00-11:00 (calzan),
-     pero el sistema permite cualquier hora (ej. 08:10-09:20).
-   Impacto: Llenado del Excel.
-   Opciones:
-     A) El bloque ocupa todas las franjas que toca y el documento se genera con
-        un aviso al docente. (sugerida)
-     B) No se permite descargar hasta que el administrador corrija el bloque.
-     C) Además, restringir la gestión de horarios para que solo acepte franjas
-        oficiales (modifica el módulo administrativo).
-   RESPUESTA:A
-5. ¿Se dicta clase los sábados?
-   Contexto: El sistema acepta bloques de lunes a sábado; las tres plantillas
-     solo tienen columnas de lunes a viernes.
-   Opciones:
-     A) No hay sábados: si existiera un bloque en sábado se avisa y no se imprime.
-     B) Sí hay: debe agregarse la columna SÁBADO a los documentos.
-   RESPUESTA:A, puedes eliminar sabado
+0.3 ANEXO 2 tal como lo leí de la imagen (confirme en la pregunta 1)
+      Horas lectivas  →  Horas de preparación de clases
+            4         →  1
+          5 y 6       →  1.5
+          7 y 8       →  2
+          9 y 10      →  2.5
+         11 y 12      →  3
+         13 y 14      →  3.5
+         15 y 16      →  4
+         17 y 18      →  4.5
+         19 y 20      →  5
+  La imagen termina en la fila de 20 horas lectivas.
 
 
 ================================================================================
-B. HORARIO PERSONAL (EXCEL)
+A. ANEXO 2 — CÁLCULO DE PREPARACIÓN DE CLASES
 ================================================================================
 
-6. [BLOQUEANTE: columnas TEORÍA/PRÁCTICA] ¿De dónde salen las horas de teoría y
-   de práctica?
-   Contexto: La plantilla tiene columnas TEORÍA y PRÁCTICA por UD y marca cada
-     celda de la grilla con (T) o (P). El sistema solo guarda weekly_hours por UD;
-     no existe el desglose ni el tipo de cada bloque.
-   Impacto: Posible columna nueva en unidades didácticas (teoría/práctica) y/o en
-     los bloques de horario (tipo T/P), y sus formularios administrativos.
+1. [BLOQUEANTE: cálculo] ¿La tabla de 0.3 es correcta y está completa?
+   Contexto: La imagen muestra filas de 4 a 20 horas lectivas. No sé si el anexo
+     original continúa en otra página.
+   RESPUESTA:si es de 4 a 20 horas
+
+2. [BLOQUEANTE: cálculo] ¿Cuántas horas de preparación corresponden a un docente
+   con MÁS de 20 horas lectivas?
+   Contexto: El anexo que tengo llega a 20. En la base de datos local hay
+     docentes con más (uno tiene 35 h asignadas) y el sistema considera normal
+     una carga de 18 a 26 h. No voy a extender la tabla por mi cuenta.
    Opciones:
-     A) Registrar horas de teoría y práctica por UD (2 columnas nuevas, opcionales)
-        y marcar cada bloque como T o P en la gestión de horarios.
-     B) Registrar solo el desglose por UD; en la grilla no se imprime (T)/(P).
-     C) Registrar solo el tipo de cada bloque (T/P) y calcular el desglose
-        sumando bloques. (sugerida: un solo dato, sin duplicar)
-     D) No manejar teoría/práctica: columnas vacías para llenar a mano.
+     A) Sigue la misma progresión (21-22 → 5.5; 23-24 → 6; 25-26 → 6.5; ...).
+     B) Tope de 5 horas para cualquier carga mayor a 20.
+     C) No debe existir carga lectiva mayor a 20: el sistema avisa y no permite
+        generar la programación hasta que se corrija la carga.
+     D) El anexo tiene más filas (adjuntar o indicarlas).
    RESPUESTA:A
 
-7. ¿Qué texto exacto va en cada celda de la grilla?
-   Contexto: El ejemplo muestra "Fundamentos de innovación tecnológica (T) -
-     Electricidad Ind." (UD + T/P + programa abreviado). No incluye sección ni
-     aula. Los programas no tienen nombre corto en el sistema (solo código y
-     nombre completo).
+3. [BLOQUEANTE: cálculo] ¿Y con MENOS de 4 horas lectivas (1, 2 o 3) o sin carga
+   lectiva?
    Opciones:
-     A) UD (T/P) - nombre completo del programa.
-     B) UD (T/P) - código del programa.
-     C) Agregar un "nombre corto" al programa de estudios (columna nueva opcional)
-        y usarlo.
-     D) Otro formato (indicar; ¿incluye sección y/o aula?).
-   RESPUESTA:C
+     A) 0 horas de preparación; en ese caso Preparación de clases no se registra.
+     B) 1 hora (el mínimo de la tabla).
+     C) Otra regla (indicar).
+   RESPUESTA:minimamente es 4 horas
 
-8. ¿Formato de la columna "SEMESTRE Y TURNO"?
-   Contexto: El ejemplo muestra "V-DIURNO" / "III-DIURNO". El sistema guarda el
-     semestre como número (1..6) y el turno por nombre ("Diurno", "Nocturno").
+4. [BLOQUEANTE: cálculo y grilla] El anexo da medias horas (1.5, 2.5, 3.5, 4.5),
+   pero usted indicó que lo no lectivo se cuenta en bloques de 60 minutos.
+   ¿Cómo se tratan?
    Opciones:
-     A) Semestre en romanos + nombre del turno en mayúsculas ("V-DIURNO"). (sugerida)
-     B) Incluir también la sección ("V-DIURNO-A").
+     A) Se conservan los decimales en los totales y documentos (ej. 1.5), y en
+        la grilla la media hora ocupa un bloque de 30 minutos.
+     B) Se redondea hacia arriba al entero (1.5 → 2).
+     C) Se redondea hacia abajo al entero (1.5 → 1).
+     D) En los documentos figura 1.5, pero en la grilla ocupa un bloque completo
+        de 60 minutos.
    RESPUESTA:A
 
-9. ¿Una fila por sección o por UD en la tabla inferior?
-   Contexto: Si el docente dicta la misma UD a las secciones A y B del mismo
-     programa, son dos cargas distintas en el sistema.
+5. ¿Qué carga lectiva se usa para entrar al anexo?
+   Contexto: El título del anexo habla de "horas pedagógicas".
    Opciones:
-     A) Una fila por cada sección (carga asignada). (sugerida)
-     B) Una fila por UD sumando horas.
+     A) La suma de horas semanales de las UD asignadas al docente en el periodo
+        (el mismo "TOTAL CARGA LECTIVA" del horario personal). (sugerida)
+     B) Las horas efectivamente programadas en la grilla de horarios.
    RESPUESTA:A
 
-10. La tabla inferior tiene 8 filas (y el total suma I22:I29). ¿Qué hacer si el
-    docente tiene más de 8 cargas?
+6. ¿El docente puede modificar las horas de Preparación de clases calculadas?
+   Opciones:
+     A) No: siempre es el valor del anexo, solo lectura. (sugerida)
+     B) Sí, puede aumentarlas (el anexo es el mínimo).
+     C) Sí, puede reducirlas (el anexo es el máximo).
+   RESPUESTA:A
+
+7. Si la carga lectiva cambia después (el área académica agrega o quita una UD),
+   las horas de preparación cambian y el total puede dejar de cuadrar.
+   Opciones:
+     A) Preparación se recalcula sola; el docente ve un aviso y debe ajustar sus
+        otras actividades antes de volver a descargar. (sugerida)
+     B) Se conserva lo registrado hasta que el docente pulse "Recalcular".
+   RESPUESTA:A
+
+8. ¿Preparación de clases lleva subactividad (texto) y días como las demás?
+   Opciones:
+     A) Sí: el docente escribe la subactividad y ubica sus horas en la semana.
+     B) Texto fijo (ej. "Planificación y elaboración de actividades de
+        aprendizaje"); el docente solo ubica las horas.
+     C) No se ubica en la grilla: solo figura en los totales.
+   RESPUESTA:A
+
+
+================================================================================
+B. JORNADA: TIEMPO COMPLETO / TIEMPO PARCIAL
+================================================================================
+
+9. [BLOQUEANTE: totales] ¿El total (lectivas + no lectivas) debe ser EXACTAMENTE
+   la jornada o puede ser menor?
+   Opciones:
+     A) Exactamente 40 (o 20): no se puede descargar la programación mientras
+        falten o sobren horas.
+     B) Como máximo 40 (o 20): puede ser menor.
+     C) Máximo para guardar; exacto para descargar/presentar el documento.
+   RESPUESTA:A
+
+10. [BLOQUEANTE: totales] ¿Cómo se suman horas lectivas (de 45/40 minutos) con
+    horas no lectivas (de 60 minutos)?
+    Contexto: Un docente con 20 horas lectivas de 45 min ocupa 15 horas de reloj.
     Opciones:
-      A) Insertar filas conservando el formato y ajustar la fórmula. (sugerida)
-      B) Nunca habrá más de 8.
+      A) Se suman como unidades: 20 lectivas + 20 no lectivas = 40, sin
+         convertir minutos. (sugerida: es como lo presentan las plantillas)
+      B) Se convierten a tiempo real (20 lectivas de 45 min = 15 h de reloj, por
+         lo que caben 25 h no lectivas).
+    RESPUESTA:A se cuenta el total de horas de la unidad didactica asigandas + las hoars nolectivas
+
+11. Dato nuevo "Condición laboral" en la ficha del docente.
+    Contexto: La ficha ya tiene "Tipo Contrato" (Contratado / Nombrado / Por
+      horas), que es otra cosa y no se toca. Propongo una columna nueva y
+      opcional en docentes, con un selector "Tiempo completo (40 h)" /
+      "Tiempo parcial (20 h)" en people/teachers.
+    Pregunta: ¿Qué valor reciben los docentes que ya existen?
+    Opciones:
+      A) Todos quedan como Tiempo completo; el administrador corrige los que
+         sean parciales. (sugerida)
+      B) Quedan "sin definir" y el docente no puede configurar su horario no
+         lectivo hasta que el administrador lo indique.
+      C) Los de contrato "Por horas" quedan como Tiempo parcial; el resto,
+         completo.
     RESPUESTA:A
 
-11. ¿"TOTAL CARGA LECTIVA" es la suma de horas de las UD asignadas o la suma de
-    horas efectivamente programadas en el horario?
-    Contexto: Pueden diferir si el horario está incompleto.
+12. ¿La condición laboral es fija del docente o puede cambiar por periodo?
+    Contexto: Si cambia de un semestre a otro, los documentos de periodos
+      anteriores deben conservar la jornada que tenían.
     Opciones:
-      A) Horas de las UD asignadas (carga académica); si el horario está
-         incompleto se avisa al docente. (sugerida)
-      B) Horas programadas en la grilla.
+      A) Un solo dato en la ficha; al guardar la programación de un periodo se
+         copia la jornada vigente para conservar el histórico. (sugerida)
+      B) Un solo dato en la ficha, sin histórico.
+      C) Se define por docente y periodo (pantalla adicional).
     RESPUESTA:A
 
-12. ¿Puede descargarse el horario personal si el horario está incompleto?
+13. ¿Qué hacer si la carga lectiva sola ya supera la jornada?
+    Contexto: Ej. tiempo parcial (20 h) con 22 h lectivas, o tiempo completo con
+      carga + preparación mayor a 40. Hoy la asignación de carga no valida topes.
     Opciones:
-      A) Sí, con una advertencia visible en pantalla. (sugerida)
-      B) No, hasta que todas las horas de sus UD estén programadas.
+      A) No se toca la asignación de carga; el docente ve un aviso y no puede
+         generar la programación hasta que el área académica corrija. (sugerida)
+      B) Además, impedir desde carga académica asignar por encima de la jornada
+         (modifica un módulo en producción).
     RESPUESTA:A
 
-13. Encabezado, logos y firmas.
-    Contexto: El título dice "HORARIO PERSONAL DEL DOCENTE 2026-I"; los logos
-      están en el encabezado de página y el pie dice "Docente / Coordinador(a). /
-      Jefe de Unidad Académica" sin nombres.
-    Pregunta: a) ¿El título usa el código del periodo activo (ej. 2026-I)?
-              b) ¿Los logos de la plantilla son los definitivos?
-              c) ¿El pie queda solo con los cargos (para firmar a mano) o debe
-                 imprimir nombres? Si imprime nombres: ¿de qué coordinador, si el
-                 docente dicta en varios programas? ¿Quién es el Jefe de Unidad
-                 Académica (no está registrado en el sistema)?
-    RESPUESTA:A) si, b) podemos agregar campo para subir logo para horarios http://127.0.0.1:8000/settings/institution, c) firmar a mano
-
-14. ¿Formato del nombre del docente?
-    Contexto: La plantilla muestra "HUARCAYA FLORES, Jorge Antonio". El sistema
-      guarda nombres y apellidos tal como se digitaron.
-    Opciones:
-      A) "APELLIDOS, Nombres" (apellidos en mayúsculas). (sugerida)
-      B) Tal como está registrado.
-    RESPUESTA: b (mayusculas)
-
-
-================================================================================
-C. HORARIO NO LECTIVO — DATOS Y PANTALLA
-================================================================================
-
-15. [BLOQUEANTE: horario no lectivo] Regla de distribución de horas no lectivas.
-    Pregunta: Proporcionar la regla anunciada (cómo se completan y distribuyen
-      las horas no lectivas). No se asumirá ningún criterio.
-    Para dejar lista la propuesta necesito saber, como mínimo:
-      a) ¿Total no lectivo = 40 - carga lectiva, o depende de la condición /
-         jornada del docente?
-      b) ¿Hay horas mínimas o máximas por actividad (ej. preparación de clases
-         proporcional a las horas lectivas)?
-      c) ¿Alguna actividad es obligatoria para todos (ej. tutoría, preparación
-         de clases)?
-      d) ¿Quién decide la distribución: el docente, el coordinador o la jefatura?
-      e) ¿Hay restricciones de día/hora (dentro de qué jornada, receso, refrigerio)?
+14. ¿Un docente "Por horas" (tipo de contrato) presenta estos documentos?
+    Contexto: El Word solo tiene casillas NOMBRADO ( ) y CONTRATADO ( ).
     RESPUESTA:
 
-16. [BLOQUEANTE: totales] ¿La jornada es de 40 horas para todos los docentes?
-    Contexto: El Word trae fijo "HORAS SEMANALES: 40" y "TOTAL HORAS 40". El
-      sistema registra la condición del docente como Nombrado, Contratado o
-      "Por horas" (hoy: 5 nombrados y 7 contratados en la BD local).
-    Opciones:
-      A) 40 h para todos; el total debe ser exactamente 40.
-      B) 40 h es el máximo; el total puede ser menor (ej. tiempo parcial).
-      C) Depende de la condición: registrar la jornada semanal de cada docente
-         (dato nuevo en el docente o por periodo).
-    RESPUESTA:
+15. En el Word figura fijo "HORAS SEMANALES: 40" y "TOTAL HORAS 40".
+    Pregunta: ¿Para tiempo parcial se imprime 20 en ambos lugares? (sugerido: sí)
+    RESPUESTA: si
 
-17. [BLOQUEANTE: suma de 40 h] ¿Cómo se suman horas lectivas (pedagógicas) y no
-    lectivas?
-    Contexto: Si la hora lectiva es de 45/40 min y la no lectiva de 60 min, la
-      suma en horas "nominales" y en tiempo real no coincide. La plantilla del
-      horario no lectivo usa filas de 60 min (08:00 a 16:00).
+
+================================================================================
+C. ACTIVIDADES Y SUBACTIVIDADES
+================================================================================
+
+16. [BLOQUEANTE: modelo de datos] ¿Cuántas subactividades puede tener una misma
+    actividad?
+    Contexto: Usted indica que "cada actividad seleccionada debe permitir
+      registrar una SUBACTIVIDAD".
     Opciones:
-      A) Se suman como unidades: 1 hora lectiva = 1, 1 hora no lectiva = 1.
-      B) Las no lectivas también son horas pedagógicas.
+      A) Exactamente una subactividad por actividad (máximo 4 filas en total).
+      B) Varias subactividades dentro de la misma actividad, cada una con sus
+         horas y días; el límite de 4 se cuenta por actividad, no por fila.
+    RESPUESTA: A, ahi lo escribe la sub actibidad
+
+17. ¿Es obligatorio completar hasta la jornada aunque el docente registre solo
+    2 actividades?
+    Contexto: Ej. tiempo completo con 20 lectivas y 5 de preparación: faltan 15 h
+      que deberían repartirse en 1 a 3 actividades más.
+    (Depende de la respuesta 9; indique si hay algo adicional.)
+    RESPUESTA:Depende de la respuesta 9
+
+18. ¿Hay mínimo o máximo de horas por actividad distinta de Preparación?
+    Opciones:
+      A) No: mínimo 1 hora, sin máximo (solo el tope de la jornada). (sugerida)
+      B) Sí (indicar por actividad).
+    RESPUESTA:A
+
+19. ¿Las horas de las demás actividades son siempre enteras?
+    Opciones:
+      A) Sí, solo horas completas (bloques de 60 min). (sugerida)
+      B) Se permiten medias horas.
+    Nota: si Preparación queda con medias horas (pregunta 4) y las demás son
+      enteras, el total nunca sumará un 40 exacto para cargas de 5-6, 9-10,
+      13-14 o 17-18 horas lectivas. Indique cómo debe resolverse en ese caso.
+    RESPUESTA:b
+
+20. ¿La subactividad (texto) es obligatoria?
+    Opciones:
+      A) Sí, mínimo 5 caracteres y máximo 255. (sugerida)
+      B) Opcional.
+    RESPUESTA:A
+
+21. ¿Alguna actividad está restringida a ciertos docentes?
+    Contexto: Ej. "Otras actividades" dice en el Word "Autorizadas por el
+      Director General"; S.E.F.S.R.T. suele asignarse a docentes específicos.
+    Opciones:
+      A) Cualquier docente puede elegir cualquiera de las 8. (sugerida)
+      B) Algunas requieren autorización (indicar cuáles y quién autoriza).
+    RESPUESTA:A
+
+22. ¿Quién registra la distribución?
+    Opciones:
+      A) Cada docente desde su cuenta. (sugerida; es lo solicitado)
+      B) El docente, y además el coordinador/jefatura puede corregirla.
+    RESPUESTA:A
+
+
+================================================================================
+D. DISTRIBUCIÓN POR DÍAS Y CRUCES CON EL HORARIO LECTIVO
+================================================================================
+
+23. [BLOQUEANTE: grilla y cruces] Para cada subactividad, ¿qué registra el
+    docente exactamente?
+    Contexto: Usted indica "horas semanales" y "días de la semana". Para validar
+      que no se cruce con clases y para llenar la grilla del Excel hace falta
+      saber también a qué hora.
+    Opciones:
+      A) Marca en una grilla semanal las casillas de 1 hora que dedicará a la
+         subactividad (día + hora); el sistema exige que las casillas marcadas
+         coincidan con las horas semanales declaradas. (sugerida)
+      B) Indica por cada día: hora de inicio y cantidad de horas.
+      C) Solo indica los días y cuántas horas por día, sin hora de inicio; en
+         ese caso el sistema solo puede validar que el día tenga horas libres
+         suficientes y la grilla del Excel se llena a mano.
+    RESPUESTA:A
+
+24. [BLOQUEANTE: grilla] ¿En qué franjas pueden ubicarse las horas no lectivas?
+    Contexto: La plantilla "HORARIO NO LECTIVO" trae 8 filas fijas de 60 min:
+      08:00-09:00 ... 15:00-16:00, de lunes a viernes (40 casillas).
+    Opciones:
+      A) Solo en esas 8 franjas (08:00 a 16:00).
+      B) En cualquier hora en punto dentro de un rango más amplio (indicar, ej.
+         07:00 a 21:00); el Excel agregaría las filas necesarias.
+      C) Depende del turno del docente (indicar franjas para turno noche).
+    RESPUESTA:A
+
+25. [BLOQUEANTE: cruces] Las clases duran 45 o 40 min y las franjas no lectivas
+    60 min, así que no calzan. ¿Cuándo se considera que una hora no lectiva
+    "se cruza" con una clase?
+    Ejemplo: clase de 08:45 a 09:30; casillas no lectivas 08:00-09:00 y
+      09:00-10:00.
+    Opciones:
+      A) Cruce por hora real: cualquier casilla que comparta minutos con una
+         clase queda bloqueada (en el ejemplo, ambas). Es lo más estricto; un
+         docente con toda la mañana lectiva (08:00-13:00) solo dispondría de
+         13:00 a 16:00.
+      B) Se bloquea la casilla solo si la clase ocupa más de la mitad.
       C) Otra regla (indicar).
-    RESPUESTA:
+    RESPUESTA:A
 
-18. Catálogo de actividades y subactividades no lectivas.
-    Contexto: Ambas plantillas usan las mismas 8 actividades (RSG 349-2017):
-      a) Diseño y desarrollo académico; b) Desarrollo institucional;
-      c) Estrategias de articulación con el sector productivo; d) Investigación e
-      innovación; e) Preparación de clase; f) Seguimiento y servicios de apoyo al
-      estudiante y egresado; g) S.E.F.S.R.T.; h) Otras actividades.
-      El Word fija 18 subactividades (ej. "Tutoría y consejería por sección");
-      el Excel tiene una columna "SUB ACTIVIDAD" en blanco.
-    Pregunta: ¿El catálogo es fijo o administrable?
+26. Con la opción más estricta puede no haber casillas suficientes.
+    Ejemplo: tiempo completo, 20 h lectivas todas en la mañana (lunes a viernes
+      08:00-11:00 + 11:30-12:15): quedan libres de 13:00 a 16:00 = 15 casillas,
+      pero necesita 20 h no lectivas.
+    Pregunta: ¿Cómo se resuelve? (más franjas —pregunta 24—, regla de cruce más
+      flexible —pregunta 25—, o permitir horas "fuera del instituto" sin ubicar
+      en la grilla, ya que la norma indica que pueden realizarse dentro o fuera).
+    RESPUESTA:en las horas lectivas de lunes a viernes va tener horas sueltas, no va tener horario corrido, no se va dar ese caso
+
+27. ¿El receso (11:00-11:30) y el refrigerio cuentan como tiempo disponible para
+    lo no lectivo? ¿Existe un horario de refrigerio que deba quedar libre?
+    RESPUESTA: el refrigerio cuentan como tiempo disponible para
+    lo no lectivo
+
+28. ¿Dos subactividades pueden compartir la misma casilla (mismo día y hora)?
     Opciones:
-      A) Fijo en el sistema (igual a la plantilla); cambia solo si cambia la
-         norma. (sugerida: menos pantallas y sin riesgo de desalinear el Word)
-      B) Administrable por la jefatura (pantalla de mantenimiento nueva).
-    Y además: en el Excel, ¿"SUB ACTIVIDAD" es una de las 18 del Word, o un texto
-      libre que escribe el docente (ej. el nombre del proyecto)?
-    RESPUESTA:
+      A) No: una casilla, una subactividad. (sugerida)
+      B) Sí.
+    RESPUESTA:A
 
-19. ¿Las horas se registran por actividad o por subactividad?
-    Contexto: El Word tiene una casilla de horas por cada una de las 18
-      subactividades; el Excel, una por cada una de las 8 actividades.
+29. ¿Qué pasa si el área académica cambia el horario lectivo después y una clase
+    queda encima de una hora no lectiva ya registrada?
     Opciones:
-      A) Por subactividad; el Excel muestra la suma por actividad. (sugerida)
-      B) Por actividad; en el Word se anota en la primera subactividad.
-    RESPUESTA:
+      A) El cambio lectivo se permite (no se toca la gestión de horarios); la
+         hora no lectiva queda marcada en rojo y el docente debe reubicarla
+         antes de descargar sus documentos. (sugerida)
+      B) Impedir el cambio lectivo si cruza con lo no lectivo (modifica el
+         validador de horarios en producción).
+    RESPUESTA:A
 
-20. ¿Qué se registra primero: las horas por actividad o los bloques en la grilla?
+30. ¿Qué se imprime en la grilla del Excel "HORARIO NO LECTIVO"?
+    Contexto: El encabezado de página dice "HORARIO DEL DOCENTE 2026 - I".
     Opciones:
-      A) El docente define cuántas horas dedica a cada (sub)actividad y luego
-         ubica esas horas en la grilla; el sistema exige que coincidan. (sugerida)
-      B) Solo ubica bloques en la grilla y las horas se calculan sumando.
-      C) Solo registra horas por actividad; la grilla se llena a mano.
-    RESPUESTA:
+      A) Solo las horas no lectivas; en cada casilla el nombre de la actividad.
+      B) Solo no lectivas; en cada casilla la subactividad (texto del docente).
+      C) Lectivas y no lectivas juntas (horario completo).
+    RESPUESTA:A
 
-21. Franjas del horario no lectivo.
-    Contexto: La plantilla trae 8 filas de 60 min, de 08:00 a 16:00, lunes a
-      viernes.
-    Pregunta: a) ¿Las horas no lectivas solo pueden ubicarse en esas 8 franjas, o
-                 en cualquier hora (ej. docentes de turno noche)?
-              b) ¿Son siempre bloques de 1 hora exacta?
-              c) Una clase de 45 min ocupa parte de una franja de 60 min
-                 (ej. clase 08:45-09:30 frente a las franjas 08:00-09:00 y
-                 09:00-10:00): ¿ambas franjas quedan bloqueadas para lo no
-                 lectivo? (La validación de cruce se hará por hora real, salvo
-                 indicación contraria.)
-    RESPUESTA:
-
-22. ¿Qué se imprime en la grilla del documento "HORARIO NO LECTIVO"?
-    Contexto: El encabezado de página dice "HORARIO DEL DOCENTE 2026 - I" y la
-      hoja incluye tanto CARGA LECTIVA como CARGA NO LECTIVA.
+31. La ficha del docente ya tiene "Día Prep. (No Lectivo)" (hoy vacío en todos
+    los registros locales) y se imprime en el PDF de horario del módulo
+    administrativo.
     Opciones:
-      A) Solo los bloques no lectivos.
-      B) Lectivos y no lectivos juntos (horario completo del docente).
-    Y: ¿qué texto va en cada celda (actividad, subactividad, lugar)?
-    RESPUESTA:
-
-23. ¿Qué "Programa de Estudios" va en el encabezado del horario no lectivo y del
-    Word?
-    Contexto: Ambos documentos piden un único programa. En el sistema el docente
-      no pertenece a un programa: puede dictar en varios (el ejemplo de la
-      plantilla dicta en cinco).
-    Opciones:
-      A) Registrar el programa de adscripción del docente (dato nuevo, lo define
-         el administrador).
-      B) El programa donde tiene más horas lectivas en el periodo.
-      C) Listar todos los programas donde dicta.
-      D) El docente lo elige al generar el documento.
-    RESPUESTA:
-
-24. ¿Qué relación tiene el "día de preparación" que ya existe en la ficha del
-    docente?
-    Contexto: El docente tiene un campo "día de preparación" (hoy vacío en todos
-      los registros locales) que se imprime en el reporte PDF de horario del
-      módulo administrativo.
-    Opciones:
-      A) Se mantiene tal cual, sin relación con el horario no lectivo. (sugerida:
-         no se toca lo existente)
-      B) Debe usarse como restricción/sugerencia para "Preparación de clase".
-      C) Queda obsoleto (se deja de mostrar, sin borrar la columna).
-    RESPUESTA:
-
-25. ¿Docentes sin carga lectiva o con jornada distinta pueden registrar horario
-    no lectivo? (ej. coordinadores o jefes con 40 h no lectivas)
-    RESPUESTA:
+      A) Se deja tal cual, sin relación con esta funcionalidad. (sugerida)
+      B) Debe usarse: la preparación de clases se ubica ese día.
+      C) Queda en desuso (se oculta del formulario; la columna no se borra).
+    RESPUESTA:A
 
 
 ================================================================================
-D. PROGRAMACIÓN DE ACTIVIDADES ACADÉMICAS (WORD)
+E. DOCUMENTOS: EXCEL "HORARIO NO LECTIVO" Y WORD "PROGRAMACIÓN DE ACTIVIDADES"
 ================================================================================
 
-26. [BLOQUEANTE: documento Word] Forma de generar el .docx.
-    Contexto: El proyecto no tiene instalada ninguna librería para Word (solo
-      PhpSpreadsheet para Excel y DomPDF para PDF). No instalaré nada sin su
+32. [BLOQUEANTE: Word] El Word oficial tiene 18 subactividades FIJAS impresas
+    (ej. "Tutoría y consejería por sección"), cada una con su casilla de horas.
+    Ahora la subactividad será un texto libre del docente. ¿Cómo se llena?
+    Opciones:
+      A) Se conserva el texto oficial; las horas de la actividad se anotan en la
+         primera fila de esa actividad y el texto del docente NO aparece en el
+         Word (sí en el Excel, que tiene la columna "SUB ACTIVIDAD").
+      B) Al registrar, el docente elige además a cuál de las subactividades
+         oficiales corresponde (lista), y las horas van en esa fila.
+      C) Se modifica la plantilla Word: una fila por actividad con el texto del
+         docente en lugar de las 18 subactividades fijas.
+    RESPUESTA:las actividades y sub actividades vienes de HORARIO NO LECTIVO los que el amestro previamente configuro
+
+33. [BLOQUEANTE: Word] Forma de generar el archivo .docx.
+    Contexto: El proyecto no tiene librería para Word y no instalaré nada sin su
       autorización.
     Opciones:
-      A) Sin paquetes nuevos: convertir la plantilla oficial en una plantilla con
-         marcadores y rellenarla con las herramientas que PHP ya trae (ZipArchive).
-         Conserva el formato al 100 %; requiere preparar la plantilla una vez.
+      A) Sin paquetes nuevos: preparar la plantilla oficial con marcadores y
+         rellenarla con herramientas que PHP ya trae. Conserva el formato.
          (sugerida)
-      B) Autorizar la instalación de phpoffice/phpword (TemplateProcessor), del
-         mismo fabricante que PhpSpreadsheet.
-      C) Entregar el documento en PDF (DomPDF) en lugar de Word.
-    RESPUESTA:
+      B) Autorizar la instalación de phpoffice/phpword.
+      C) Entregar el documento en PDF en lugar de Word.
+    RESPUESTA: C
 
-27. Título y datos del periodo.
-    Contexto: La plantilla dice "PRIMER SEMESTRE 2026 - I", "AÑO ACADÉMICO: 2026-I"
-      y "del 2026".
-    Pregunta: ¿Se generan a partir del código del periodo activo ("2026-I" →
-      "PRIMER SEMESTRE", "2026-II" → "SEGUNDO SEMESTRE")? En mi BD local el periodo
-      tiene código "2026-I" pero nombre "Periodo Académico 2025 II": ¿cuál manda?
-    RESPUESTA:
-
-28. Condición: NOMBRADO ( ) CONTRATADO ( ).
-    Contexto: Se puede marcar automáticamente desde la ficha del docente
-      (Nombrado / Contratado). Existe además el valor "Por horas".
-    Pregunta: ¿Un docente "por horas" presenta este documento? ¿Cómo se marca?
-    RESPUESTA:
-
-29. La tabla de CARGA LECTIVA del Word tiene 4 filas; el Excel no lectivo, 5.
-    Pregunta: Si el docente tiene más cargas, ¿se agregan filas (sugerido) aunque
-      el documento pase a dos páginas, o se agrupan por UD?
-    RESPUESTA:
-
-30. Columna "Sección" del Word.
-    Pregunta: ¿Es la sección de la carga (A, B, C) tal como está registrada?
-      (En la BD local hay secciones en minúscula, ej. "d": ¿se imprime en
-      mayúscula?)
-    RESPUESTA:
-
-31. Fecha y firmas ("Puno, __ de ____ del 2026"; Docente / Coordinador del
-    Programa de Estudios / Jefe de Unidad Académica).
+34. ¿Qué "Programa de Estudios" va en el encabezado de ambos documentos?
+    Contexto: Piden un único programa, pero el docente puede dictar en varios y
+      su ficha no tiene programa.
     Opciones:
-      A) Se deja en blanco para llenar y firmar a mano.
-      B) Fecha de generación automática; firmas en blanco. (sugerida)
-      C) Fecha automática y nombres impresos bajo cada firma (requiere definir
-         coordinador —ver pregunta 23— y registrar al Jefe de Unidad Académica).
-    RESPUESTA:
+      A) Agregar a la ficha del docente su programa de adscripción (lo define el
+         administrador en people/teachers, junto con la condición laboral).
+      B) El programa donde tiene más horas lectivas en el periodo.
+      C) Todos los programas donde dicta, separados por coma.
+      D) El docente lo elige al generar el documento.
+    RESPUESTA:A
 
-32. Nota sobre el pie del Excel no lectivo.
-    Contexto: Allí el pie dice "Coordinador de Área Académica", mientras que el
-      Word dice "Coordinador del Programa de Estudios" y el horario personal
-      "Coordinador(a).".
-    Pregunta: ¿Se respeta cada plantilla tal cual o se unifica el cargo?
-    RESPUESTA:
+35. Título y periodo del Word ("PRIMER SEMESTRE 2026 - I", "AÑO ACADÉMICO:
+    2026-I", "del 2026").
+    Pregunta: ¿Se obtienen del código del periodo activo ("2026-I" → PRIMER
+      SEMESTRE; "2026-II" → SEGUNDO SEMESTRE)? (sugerido: sí)
+    RESPUESTA:si
+
+36. Tablas de carga lectiva (4 filas en el Word, 5 en el Excel).
+    Pregunta: ¿Una fila por sección, agregando filas si hacen falta, igual que
+      en el horario personal? ¿La sección se imprime en mayúscula? (sugerido: sí
+      a ambas)
+    RESPUESTA: todo viene del excel
+
+37. Fecha y firmas.
+    Contexto: Word: "Puno, __ de ____ del 2026" y firmas Docente / Coordinador
+      del Programa de Estudios / Jefe de Unidad Académica. Excel: pie Docente /
+      Coordinador de Área Académica / Jefe de Unidad Académica.
+    Opciones:
+      A) Fecha del día de la descarga; firmas en blanco para firmar a mano,
+         respetando el texto de cada plantilla. (sugerida)
+      B) Todo en blanco.
+    RESPUESTA:A
+
+38. Encabezado del Excel no lectivo.
+    Pregunta: ¿Usa la misma imagen "Encabezado para horarios" de Configuración →
+      Institución que el horario personal? (sugerido: sí)
+    RESPUESTA:si
 
 
 ================================================================================
-E. FLUJO, PERMISOS E HISTÓRICO
+F. FLUJO, CONSULTA E HISTÓRICO
 ================================================================================
 
-33. ¿La programación del docente requiere envío y aprobación dentro del sistema?
+39. ¿La programación requiere envío y aprobación dentro del sistema?
     Opciones:
       A) No: el docente registra, descarga, imprime y presenta en físico; puede
-         modificar mientras el periodo esté activo. (sugerida para la primera
-         versión)
-      B) Sí: flujo borrador → enviado → aprobado/observado (como los sílabos), con
-         revisión del coordinador o la jefatura. Al enviarse queda bloqueado.
-    RESPUESTA:
+         modificar mientras el periodo esté activo. (sugerida para esta versión)
+      B) Sí: borrador → enviado → aprobado / observado, con revisión del
+         coordinador o la jefatura; al enviarse queda bloqueada.
+    RESPUESTA:A
 
-34. ¿El personal administrativo debe ver o descargar estos documentos de
-    cualquier docente?
+40. ¿El personal administrativo debe ver o descargar los documentos de cualquier
+    docente?
     Opciones:
-      A) No por ahora: solo cada docente los suyos. (sugerida)
-      B) Sí: coordinadores (de sus programas) y/o jefatura/administrador, en modo
-         consulta. Indicar quiénes.
-    RESPUESTA:
+      A) No por ahora: cada docente solo los suyos. (sugerida)
+      B) Sí (indicar quiénes: coordinador de sus programas, jefatura,
+         administrador).
+    RESPUESTA:A
 
-35. ¿Qué pasa con el horario no lectivo si el administrador cambia el horario
-    lectivo después y se produce un cruce?
-    Opciones:
-      A) El cambio lectivo se permite (el módulo administrativo no se toca); el
-         bloque no lectivo en conflicto se marca y el docente debe corregirlo
-         antes de descargar. (sugerida)
-      B) Bloquear el cambio lectivo si cruza con lo no lectivo (modifica el
-         validador de horarios en producción).
-    RESPUESTA:
+41. Periodos anteriores y periodo nuevo.
+    Pregunta: a) Al cerrar un periodo, ¿el docente sigue pudiendo descargar sus
+                 documentos de ese periodo en solo lectura?
+              b) Al iniciar un periodo, ¿desea un botón "Copiar del periodo
+                 anterior" para el horario no lectivo?
+    RESPUESTA:B
 
-36. Periodos anteriores.
-    Pregunta: Al cerrar un periodo, ¿el docente puede seguir consultando y
-      descargando sus documentos de ese periodo (solo lectura)? ¿Al iniciar un
-      periodo nuevo quiere poder copiar el horario no lectivo del anterior?
-    RESPUESTA:
-
-37. Coordinadores que también dictan clases.
-    Contexto: Las rutas del docente admiten los roles Docente, Coordinador y
-      Administrador, pero los documentos solo tienen sentido si el usuario tiene
-      ficha de docente.
-    Pregunta: ¿Todos los coordinadores tienen ficha de docente? Si un usuario sin
-      ficha entra, se mostrará un mensaje informativo (sugerido).
-    RESPUESTA:
-
-38. Límites de carga lectiva.
-    Contexto: El sistema define 18 h mínimo y 26 h máximo de carga lectiva, pero
-      hoy solo se usan para colorear un reporte: al asignar carga no se valida.
-    Pregunta: ¿Se mantiene así (sugerido: no tocar la asignación de carga), o
-      desea que esos límites intervengan en la programación del docente?
-    RESPUESTA:
-
+42. ¿Pueden registrar horario no lectivo los usuarios sin carga lectiva en el
+    periodo (ej. un coordinador o jefe con ficha de docente y 0 horas lectivas)?
+    Contexto: Sin carga lectiva no hay Preparación de clases (ver pregunta 3),
+      que usted definió como obligatoria.
+    RESPUESTA:no puede, si o si debe haber carga lectiva 
 
 ================================================================================
-F. TÉCNICAS (plantillas)
-================================================================================
-
-39. Las plantillas Excel contienen vínculos a archivos externos antiguos
-    ("G:\ENTRAR\1HORARIOS 2014-2 YASITO.xlsx", "D:\JAE\...\CONTABILIDAD 2022-I.xlsx")
-    y nombres definidos rotos (#REF!). No se usan en ninguna celda.
-    Pregunta: ¿Autoriza que la copia de trabajo de la plantilla (la que usará el
-      sistema, guardada dentro del proyecto) se limpie de esos vínculos? Las
-      plantillas originales de docs/archivos no se modifican.
-    RESPUESTA:
-
-40. El archivo HOARARIO_PERSONAL.xlsx viene con datos de ejemplo de un docente
-    real y la fila 27 del ejemplo no cuadra (Teoría 1 + Práctica 2 = 5).
-    Pregunta: Confirmar que es solo un ejemplo y que la plantilla de trabajo se
-      guardará vacía. ¿HORAS SEMANALES = TEORÍA + PRÁCTICA siempre?
-    RESPUESTA:
-
-================================================================================
-FIN — 40 preguntas
+FIN — 42 preguntas (bloqueantes: 1, 2, 3, 4, 9, 10, 16, 23, 24, 25, 32, 33)
 ================================================================================

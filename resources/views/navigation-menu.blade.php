@@ -46,6 +46,9 @@
                             <x-nav-link href="{{ route('teacher.my-schedule') }}" :active="request()->routeIs('teacher.my-schedule')">
                                 {{ __('Mi Horario') }}
                             </x-nav-link>
+                            <x-nav-link href="{{ route('teacher.non-teaching-schedule') }}" :active="request()->routeIs('teacher.non-teaching-schedule')">
+                                {{ __('Horario No Lectivo') }}
+                            </x-nav-link>
                         @endif
 
                         @can('subir-silabo')
@@ -198,6 +201,9 @@
                 @if(Auth::user()->teacher)
                     <x-responsive-nav-link href="{{ route('teacher.my-schedule') }}" :active="request()->routeIs('teacher.my-schedule')">
                         {{ __('Mi Horario') }}
+                    </x-responsive-nav-link>
+                    <x-responsive-nav-link href="{{ route('teacher.non-teaching-schedule') }}" :active="request()->routeIs('teacher.non-teaching-schedule')">
+                        {{ __('Horario No Lectivo') }}
                     </x-responsive-nav-link>
                 @endif
 
